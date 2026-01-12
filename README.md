@@ -1,36 +1,99 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Seatherder
+
+Event seating management application that simplifies event organization through automated table assignments and guest check-ins.
+
+## Features
+
+- **Guest Management**: Import guests via CSV/Excel, bulk paste, or manual entry
+- **Intelligent Table Assignments**: Randomized seating with department-mixing algorithm
+- **Multi-Round Events**: Support for 1-10 rounds with configurable durations
+- **Guest Check-In**: Name search and QR code scanning
+- **QR Code Generation**: Personal QR codes for each guest and table
+- **Event Theming**: 7+ preset themes with full custom color support
+- **Real-time Timer**: Round countdown with pause/resume and audio alerts
+
+## Tech Stack
+
+- **Framework**: Next.js 16 with App Router (React 19)
+- **Backend**: Convex (serverless database + real-time sync)
+- **Styling**: Tailwind CSS v4 + shadcn/ui components
+- **Icons**: Lucide React
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- Node.js 18+
+- Convex account (free tier available at [convex.dev](https://convex.dev))
+
+### Installation
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# Install dependencies
+npm install
+
+# Set up Convex (follow prompts to create/link project)
+npx convex dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Development
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+# Start both frontend and backend
+npm run dev
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+# Or run separately:
+npm run dev:frontend  # Next.js on localhost:3000
+npm run dev:backend   # Convex dev server
+```
 
-## Learn More
+### Build
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+npm run build         # Local build
+npm run build:vercel  # Vercel deployment (deploys Convex first)
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Project Structure
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```
+src/
+├── app/                    # Next.js App Router pages
+│   ├── admin/              # Admin dashboard (protected)
+│   ├── event/[id]/         # Event management
+│   ├── checkin/            # Guest check-in search
+│   ├── scan/[qrCodeId]/    # QR code handler
+│   └── timer/[eventId]/    # Round timer display
+├── components/
+│   ├── ui/                 # shadcn/ui components
+│   └── feature/            # Feature-specific components
+└── lib/                    # Utilities and types
 
-## Deploy on Vercel
+convex/
+├── schema.ts               # Database schema
+├── events.ts               # Event mutations/queries
+└── guests.ts               # Guest mutations/queries
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Scripts
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Start development (frontend + backend) |
+| `npm run build` | Production build |
+| `npm run lint` | Run ESLint |
+| `npm run kill` | Kill all dev processes |
+| `npm run linecount` | Count lines of code |
+
+## Environment Variables
+
+Create a `.env.local` file:
+
+```env
+CONVEX_DEPLOYMENT=your-deployment-name
+NEXT_PUBLIC_CONVEX_URL=https://your-deployment.convex.cloud
+```
+
+## License
+
+Private - All rights reserved
