@@ -3,10 +3,17 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "dev": "npm run dev:backend & npm run dev:frontend",
+    "dev:frontend": "next dev",
+    "dev:backend": "convex dev --typecheck-components --live-component-sources",
+    "generate": "convex dev --once --typecheck-components",
+    "build": "npx convex codegen && next build",
+    "build:vercel": "npx convex deploy && next build",
+    "build:ci": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "kill": "pkill -f 'next dev' 2>/dev/null; pkill -f 'convex dev' 2>/dev/null || echo 'All clear'",
+    "linecount": "cloc . --exclude-dir=node_modules,dist,build,coverage,.next --exclude-ext=json,lock,md"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",
