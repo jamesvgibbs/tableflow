@@ -208,6 +208,7 @@ export default function EventPage({ params }: PageProps) {
           })),
         })
         toast.success(`Added ${guestsData.length} guest${guestsData.length !== 1 ? "s" : ""}`)
+        setShowAddGuestsDialog(false)
       } catch {
         toast.error("Failed to add guests")
       }

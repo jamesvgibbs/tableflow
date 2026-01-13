@@ -57,8 +57,17 @@ export function CsvUpload({ onImportGuests }: CsvUploadProps) {
   })
   const [allData, setAllData] = React.useState<string[][]>([])
   const [error, setError] = React.useState("")
+  const [warning, setWarning] = React.useState("")
   const [useFullName, setUseFullName] = React.useState(false)
   const fileInputRef = React.useRef<HTMLInputElement>(null)
+
+  // Create valid options for select dropdowns, filtering out empty headers
+  // and using indices as keys to handle duplicates
+  const headerOptions = React.useMemo(() => {
+    return headers
+      .map((header, index) => ({ header: header.trim(), index }))
+      .filter(({ header }) => header !== "")
+  }, [headers])
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0]
@@ -66,6 +75,7 @@ export function CsvUpload({ onImportGuests }: CsvUploadProps) {
 
     setFile(selectedFile)
     setError("")
+    setWarning("")
 
     const fileExtension = selectedFile.name.split(".").pop()?.toLowerCase()
 
@@ -81,6 +91,19 @@ export function CsvUpload({ onImportGuests }: CsvUploadProps) {
 
             const headerRow = data[0]
             const dataRows = data.slice(1).filter((row) => row.some((cell) => cell.trim()))
+
+            // Check for empty or duplicate headers
+            const emptyCount = headerRow.filter(h => !h.trim()).length
+            const validHeaders = headerRow.filter(h => h.trim())
+
+            if (validHeaders.length === 0) {
+              setError("No valid column headers found. Please ensure your file has at least one non-empty column header in the first row.")
+              return
+            }
+
+            if (emptyCount > 0) {
+              setWarning(`${emptyCount} empty column header${emptyCount > 1 ? 's were' : ' was'} found and will be skipped.`)
+            }
 
             setHeaders(headerRow)
             setAllData(dataRows)
@@ -105,13 +128,26 @@ export function CsvUpload({ onImportGuests }: CsvUploadProps) {
           return
         }
 
-        const headerRow = data[0]
+        const headerRow = data[0].map(String)
         const dataRows = data.slice(1).filter((row) => row.some((cell) => cell.toString().trim()))
 
-        setHeaders(headerRow.map(String))
+        // Check for empty or duplicate headers
+        const emptyCount = headerRow.filter(h => !h.trim()).length
+        const validHeaders = headerRow.filter(h => h.trim())
+
+        if (validHeaders.length === 0) {
+          setError("No valid column headers found. Please ensure your file has at least one non-empty column header in the first row.")
+          return
+        }
+
+        if (emptyCount > 0) {
+          setWarning(`${emptyCount} empty column header${emptyCount > 1 ? 's were' : ' was'} found and will be skipped.`)
+        }
+
+        setHeaders(headerRow)
         setAllData(dataRows.map((row) => row.map(String)))
         setPreviewData(dataRows.slice(0, 3).map((row) => row.map(String)))
-        autoDetectColumns(headerRow.map(String))
+        autoDetectColumns(headerRow)
       } else {
         setError("Unsupported file type. Please use .csv, .xlsx, or .xls")
       }
@@ -236,6 +272,7 @@ export function CsvUpload({ onImportGuests }: CsvUploadProps) {
     })
     setUseFullName(false)
     setError("")
+    setWarning("")
     if (fileInputRef.current) {
       fileInputRef.current.value = ""
     }
@@ -341,8 +378,8 @@ export function CsvUpload({ onImportGuests }: CsvUploadProps) {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="__none__">Select column...</SelectItem>
-                          {headers.map((header) => (
-                            <SelectItem key={header} value={header}>
+                          {headerOptions.map(({ header, index }) => (
+                            <SelectItem key={index} value={header}>
                               {header}
                             </SelectItem>
                           ))}
@@ -366,8 +403,8 @@ export function CsvUpload({ onImportGuests }: CsvUploadProps) {
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="__none__">Select column...</SelectItem>
-                            {headers.map((header) => (
-                              <SelectItem key={header} value={header}>
+                            {headerOptions.map(({ header, index }) => (
+                              <SelectItem key={index} value={header}>
                                 {header}
                               </SelectItem>
                             ))}
@@ -388,8 +425,8 @@ export function CsvUpload({ onImportGuests }: CsvUploadProps) {
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="__none__">None</SelectItem>
-                            {headers.map((header) => (
-                              <SelectItem key={header} value={header}>
+                            {headerOptions.map(({ header, index }) => (
+                              <SelectItem key={index} value={header}>
                                 {header}
                               </SelectItem>
                             ))}
@@ -412,8 +449,8 @@ export function CsvUpload({ onImportGuests }: CsvUploadProps) {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="__none__">None</SelectItem>
-                        {headers.map((header) => (
-                          <SelectItem key={header} value={header}>
+                        {headerOptions.map(({ header, index }) => (
+                          <SelectItem key={index} value={header}>
                             {header}
                           </SelectItem>
                         ))}
@@ -434,8 +471,8 @@ export function CsvUpload({ onImportGuests }: CsvUploadProps) {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="__none__">None</SelectItem>
-                        {headers.map((header) => (
-                          <SelectItem key={header} value={header}>
+                        {headerOptions.map(({ header, index }) => (
+                          <SelectItem key={index} value={header}>
                             {header}
                           </SelectItem>
                         ))}
@@ -456,8 +493,8 @@ export function CsvUpload({ onImportGuests }: CsvUploadProps) {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="__none__">None</SelectItem>
-                        {headers.map((header) => (
-                          <SelectItem key={header} value={header}>
+                        {headerOptions.map(({ header, index }) => (
+                          <SelectItem key={index} value={header}>
                             {header}
                           </SelectItem>
                         ))}
@@ -507,6 +544,12 @@ export function CsvUpload({ onImportGuests }: CsvUploadProps) {
                     </Table>
                   </div>
                 </div>
+              )}
+
+              {warning && (
+                <p className="text-sm text-amber-600 dark:text-amber-500">
+                  Note: {warning}
+                </p>
               )}
 
               {error && <p className="text-sm text-destructive">{error}</p>}

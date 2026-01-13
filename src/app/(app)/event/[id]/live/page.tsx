@@ -1382,61 +1382,81 @@ export default function LiveEventPage({ params }: PageProps) {
                         className="divide-y"
                         style={themedStyles ? { borderColor: `${themedStyles.cardTextMuted.color}20` } : undefined}
                       >
-                        {attendanceGuests.map((guest) => (
-                          <div
-                            key={guest._id}
-                            className="flex items-center justify-between p-4 transition-colors"
-                            style={themedStyles ? {
-                              borderColor: `${themedStyles.cardTextMuted.color}20`,
-                            } : undefined}
-                          >
-                            <div className="flex items-center gap-3 min-w-0">
-                              {guest.checkedIn ? (
-                                <CheckCircle2 className="size-5 shrink-0" style={{ color: themedStyles ? themeColors?.primary : '#16a34a' }} />
-                              ) : (
-                                <div
-                                  className="size-5 rounded-full border-2 shrink-0"
-                                  style={{ borderColor: themedStyles ? `${themedStyles.cardTextMuted.color}50` : 'var(--muted-foreground)' }}
-                                />
-                              )}
-                              <div className="min-w-0">
-                                <p className="font-medium truncate" style={themedStyles?.cardText}>{guest.name}</p>
-                                <div className="flex items-center gap-2 text-sm" style={themedStyles?.cardTextMuted}>
-                                  {guest.department && <span>{guest.department}</span>}
-                                  {guest.tableNumber && (
-                                    <>
-                                      {guest.department && <span>•</span>}
-                                      <span>Table {guest.tableNumber}</span>
-                                    </>
-                                  )}
+                        {attendanceGuests.map((guest) => {
+                          // Get all round assignments for this guest
+                          const guestAssignments = roundAssignmentsByGuest?.[guest._id]
+                          const hasMultipleRounds = (event.numberOfRounds || 1) > 1 && guestAssignments && guestAssignments.length > 0
+
+                          // Build table assignments display
+                          let tableDisplay: string | null = null
+                          if (hasMultipleRounds) {
+                            // Sort by round number and format as "R1: T1 • R2: T3 • R3: T5"
+                            const sortedAssignments = [...guestAssignments].sort(
+                              (a: ConvexRoundAssignment, b: ConvexRoundAssignment) => a.roundNumber - b.roundNumber
+                            )
+                            tableDisplay = sortedAssignments
+                              .map((a: ConvexRoundAssignment) => `R${a.roundNumber}: T${a.tableNumber}`)
+                              .join(' • ')
+                          } else if (guest.tableNumber) {
+                            tableDisplay = `Table ${guest.tableNumber}`
+                          }
+
+                          return (
+                            <div
+                              key={guest._id}
+                              className="flex items-center justify-between p-4 transition-colors"
+                              style={themedStyles ? {
+                                borderColor: `${themedStyles.cardTextMuted.color}20`,
+                              } : undefined}
+                            >
+                              <div className="flex items-center gap-3 min-w-0">
+                                {guest.checkedIn ? (
+                                  <CheckCircle2 className="size-5 shrink-0" style={{ color: themedStyles ? themeColors?.primary : '#16a34a' }} />
+                                ) : (
+                                  <div
+                                    className="size-5 rounded-full border-2 shrink-0"
+                                    style={{ borderColor: themedStyles ? `${themedStyles.cardTextMuted.color}50` : 'var(--muted-foreground)' }}
+                                  />
+                                )}
+                                <div className="min-w-0">
+                                  <p className="font-medium truncate" style={themedStyles?.cardText}>{guest.name}</p>
+                                  <div className="flex items-center gap-2 text-sm flex-wrap" style={themedStyles?.cardTextMuted}>
+                                    {guest.department && <span>{guest.department}</span>}
+                                    {tableDisplay && (
+                                      <>
+                                        {guest.department && <span>•</span>}
+                                        <span>{tableDisplay}</span>
+                                      </>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
+                              <div className="shrink-0 ml-4">
+                                {guest.checkedIn ? (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleUndoCheckIn(guest._id)}
+                                    style={themedStyles?.cardTextMuted}
+                                  >
+                                    Undo
+                                  </Button>
+                                ) : (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleManualCheckIn(guest._id)}
+                                    className="gap-1.5"
+                                    style={themedStyles ? { ...themedStyles.outlineButton, borderColor: themedStyles.cardTextMuted.color + '40' } : undefined}
+                                  >
+                                    <CheckCircle2 className="size-4" />
+                                    Check In
+                                  </Button>
+                                )}
+                              </div>
                             </div>
-                            <div className="shrink-0 ml-4">
-                              {guest.checkedIn ? (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleUndoCheckIn(guest._id)}
-                                  style={themedStyles?.cardTextMuted}
-                                >
-                                  Undo
-                                </Button>
-                              ) : (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleManualCheckIn(guest._id)}
-                                  className="gap-1.5"
-                                  style={themedStyles ? { ...themedStyles.outlineButton, borderColor: themedStyles.cardTextMuted.color + '40' } : undefined}
-                                >
-                                  <CheckCircle2 className="size-4" />
-                                  Check In
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-                        ))}
+                          )
+                        })}
                       </div>
                     )}
                   </CardContent>
