@@ -1,6 +1,11 @@
 import { v } from "convex/values"
 import { mutation, query } from "./_generated/server"
 import { Id } from "./_generated/dataModel"
+import {
+  calculateGuestCompatibility,
+  DEFAULT_WEIGHTS,
+  type MatchingWeights,
+} from "./matching"
 
 // List all events (sorted by createdAt descending)
 export const list = query({
@@ -52,6 +57,18 @@ export const create = mutation({
   args: {
     name: v.string(),
     tableSize: v.number(),
+    numberOfRounds: v.optional(v.number()),
+    roundDuration: v.optional(v.number()),
+    eventType: v.optional(v.string()),
+    eventTypeSettings: v.optional(v.object({
+      guestLabel: v.string(),
+      guestLabelPlural: v.string(),
+      tableLabel: v.string(),
+      tableLabelPlural: v.string(),
+      departmentLabel: v.string(),
+      departmentLabelPlural: v.string(),
+      showRoundTimer: v.boolean(),
+    })),
   },
   handler: async (ctx, args) => {
     const eventId = await ctx.db.insert("events", {
@@ -59,7 +76,10 @@ export const create = mutation({
       tableSize: args.tableSize,
       createdAt: new Date().toISOString(),
       isAssigned: false,
-      roundDuration: 30, // Default 30 minutes
+      numberOfRounds: args.numberOfRounds || 1,
+      roundDuration: args.roundDuration || 30,
+      eventType: args.eventType,
+      eventTypeSettings: args.eventTypeSettings,
     })
     return eventId
   },
@@ -151,6 +171,41 @@ export const updateNumberOfRounds = mutation({
       return { numberOfRounds: newRounds, regenerated: false }
     }
 
+    // Fetch matching config for this event (use defaults if not configured)
+    const matchingConfig = await ctx.db
+      .query("matchingConfig")
+      .withIndex("by_event", (q) => q.eq("eventId", args.id))
+      .unique()
+
+    const matchingWeights: MatchingWeights = matchingConfig?.weights
+      ? { ...DEFAULT_WEIGHTS, ...matchingConfig.weights }
+      : DEFAULT_WEIGHTS
+
+    // Fetch constraints for this event
+    const constraintDocs = await ctx.db
+      .query("seatingConstraints")
+      .withIndex("by_event", (q) => q.eq("eventId", args.id))
+      .collect()
+
+    // Process constraints into lookup structures
+    const constraints: ConstraintData = {
+      pins: new Map<string, number>(),
+      repels: new Set<string>(),
+      attracts: new Set<string>(),
+    }
+
+    for (const c of constraintDocs) {
+      if (c.type === "pin" && c.tableNumber !== undefined) {
+        constraints.pins.set(c.guestIds[0].toString(), c.tableNumber)
+      } else if (c.type === "repel") {
+        const pair = c.guestIds.map((id) => id.toString()).sort().join("-")
+        constraints.repels.add(pair)
+      } else if (c.type === "attract") {
+        const pair = c.guestIds.map((id) => id.toString()).sort().join("-")
+        constraints.attracts.add(pair)
+      }
+    }
+
     const numTables = Math.ceil(guests.length / event.tableSize)
 
     // Get existing round assignments to build history
@@ -182,8 +237,24 @@ export const updateNumberOfRounds = mutation({
       // Get previous round assignments for travel distance calculation
       const previousRoundAssignments = allRoundAssignments.get(roundNum - 1)
 
-      // Use scoring algorithm for new rounds
-      const shuffledGuests = shuffleArray([...guests])
+      // Pre-assign pinned guests first
+      const pinnedGuestIds = new Set<string>()
+      for (const [guestId, tableNum] of constraints.pins) {
+        if (tableNum > 0 && tableNum <= numTables) {
+          const guest = guests.find((g) => g._id.toString() === guestId)
+          if (guest && tables[tableNum - 1].length < event.tableSize) {
+            tables[tableNum - 1].push(guest)
+            roundAssignment.set(guest._id, tableNum)
+            pinnedGuestIds.add(guestId)
+          }
+        }
+      }
+
+      // Use scoring algorithm for unpinned guests with matching weights and constraints
+      const unpinnedGuests = guests.filter(
+        (g) => !pinnedGuestIds.has(g._id.toString())
+      )
+      const shuffledGuests = shuffleArray([...unpinnedGuests])
 
       for (const guest of shuffledGuests) {
         let bestTable = -1
@@ -199,7 +270,9 @@ export const updateNumberOfRounds = mutation({
             tableIdx + 1,
             tables[tableIdx],
             tablemateHistory,
-            previousTableNum
+            previousTableNum,
+            matchingWeights,
+            constraints
           )
 
           if (score < bestScore) {
@@ -426,31 +499,70 @@ function shuffleArray<T>(array: T[]): T[] {
 }
 
 // Types for multi-round assignment
+type GuestAttributes = {
+  interests?: string[]
+  jobLevel?: string
+  goals?: string[]
+  customTags?: string[]
+}
+
 type GuestDoc = {
   _id: Id<"guests">
   name: string
   department?: string
   eventId: Id<"events">
+  attributes?: GuestAttributes
+}
+
+// Constraint data structure for scoring
+type ConstraintData = {
+  pins: Map<string, number>  // guestId -> tableNumber
+  repels: Set<string>        // "guestId1-guestId2" pairs (sorted)
+  attracts: Set<string>      // "guestId1-guestId2" pairs (sorted)
 }
 
 // Calculate assignment score for placing a guest at a table
+// Lower score = better placement
 function calculateAssignmentScore(
   guest: GuestDoc,
   tableNumber: number,
   currentTableGuests: GuestDoc[],
   tablemateHistory: Map<string, Set<string>>,
-  previousTableNumber: number | null
+  previousTableNumber: number | null,
+  matchingWeights: MatchingWeights = DEFAULT_WEIGHTS,
+  constraints?: ConstraintData
 ): number {
-  // Weight all constraints equally
-  const WEIGHTS = { departmentMix: 1.0, repeatTablemate: 1.0, travelDistance: 1.0 }
+  // Base constraints (always applied)
+  const BASE_WEIGHTS = { travelDistance: 0.3 }
+  let score = 0
+  const guestId = guest._id.toString()
 
-  // 1. Department Mix Score - count same-department guests at table
-  const sameDeptCount = currentTableGuests.filter(
-    (g) => g.department && g.department === guest.department
-  ).length
-  const departmentMixScore = sameDeptCount
+  // 0. CONSTRAINT SCORING (highest priority)
+  if (constraints) {
+    // Pin constraint - if guest is pinned to this table, strong bonus; if pinned elsewhere, strong penalty
+    const pinnedTable = constraints.pins.get(guestId)
+    if (pinnedTable !== undefined) {
+      if (pinnedTable === tableNumber) {
+        score -= 10000 // Very strong bonus (negative = better since we minimize)
+      } else {
+        score += 10000 // Very strong penalty
+      }
+    }
 
-  // 2. Repeat Tablemate Score - count previous tablemates at table
+    // Repel constraint - heavy penalty for same table as repelled guest
+    for (const tableGuest of currentTableGuests) {
+      const pair = [guestId, tableGuest._id.toString()].sort().join("-")
+      if (constraints.repels.has(pair)) {
+        score += 5000 // Heavy penalty
+      }
+      if (constraints.attracts.has(pair)) {
+        score -= 500 // Moderate bonus for attract
+      }
+    }
+  }
+
+  // 1. Repeat Tablemate Score - count previous tablemates at table
+  // This uses repeatAvoidance from matching config
   const guestHistory = tablemateHistory.get(guest._id) || new Set()
   let repeatCount = 0
   for (const tableGuest of currentTableGuests) {
@@ -458,19 +570,37 @@ function calculateAssignmentScore(
       repeatCount++
     }
   }
-  const repeatTablemateScore = repeatCount
+  // Higher repeatAvoidance weight means stronger penalty for repeat tablemates
+  const repeatTablemateScore = repeatCount * matchingWeights.repeatAvoidance
 
-  // 3. Travel Distance Score - distance from previous table
+  // 2. Travel Distance Score - distance from previous table (small weight)
   let travelDistanceScore = 0
   if (previousTableNumber !== null) {
-    travelDistanceScore = Math.abs(tableNumber - previousTableNumber)
+    travelDistanceScore = Math.abs(tableNumber - previousTableNumber) * BASE_WEIGHTS.travelDistance
   }
 
-  return (
-    departmentMixScore * WEIGHTS.departmentMix +
-    repeatTablemateScore * WEIGHTS.repeatTablemate +
-    travelDistanceScore * WEIGHTS.travelDistance
-  )
+  // 3. Guest Compatibility Score - uses matching algorithm
+  // Calculate average compatibility with current table guests
+  // Higher compatibility = lower score (we're minimizing)
+  let compatibilityScore = 0
+  if (currentTableGuests.length > 0) {
+    let totalCompatibility = 0
+    for (const tableGuest of currentTableGuests) {
+      totalCompatibility += calculateGuestCompatibility(
+        { department: guest.department, attributes: guest.attributes },
+        { department: tableGuest.department, attributes: tableGuest.attributes },
+        matchingWeights
+      )
+    }
+    // Average compatibility, inverted (higher compat = lower score)
+    // Multiply by -1 since higher compatibility is better, but we're minimizing score
+    compatibilityScore = -(totalCompatibility / currentTableGuests.length)
+  }
+
+  // Combine scores
+  // repeatTablemateScore and travelDistanceScore are penalties (higher = worse)
+  // compatibilityScore is inverted compatibility (lower = better compat)
+  return score + repeatTablemateScore + travelDistanceScore + compatibilityScore
 }
 
 // Build tablemate history from previous rounds
@@ -522,6 +652,41 @@ export const assignTables = mutation({
 
     if (guests.length === 0) throw new Error("No guests to assign")
 
+    // Fetch matching config for this event (use defaults if not configured)
+    const matchingConfig = await ctx.db
+      .query("matchingConfig")
+      .withIndex("by_event", (q) => q.eq("eventId", args.id))
+      .unique()
+
+    const matchingWeights: MatchingWeights = matchingConfig?.weights
+      ? { ...DEFAULT_WEIGHTS, ...matchingConfig.weights }
+      : DEFAULT_WEIGHTS
+
+    // Fetch constraints for this event
+    const constraintDocs = await ctx.db
+      .query("seatingConstraints")
+      .withIndex("by_event", (q) => q.eq("eventId", args.id))
+      .collect()
+
+    // Process constraints into lookup structures
+    const constraints: ConstraintData = {
+      pins: new Map<string, number>(),
+      repels: new Set<string>(),
+      attracts: new Set<string>(),
+    }
+
+    for (const c of constraintDocs) {
+      if (c.type === "pin" && c.tableNumber !== undefined) {
+        constraints.pins.set(c.guestIds[0].toString(), c.tableNumber)
+      } else if (c.type === "repel") {
+        const pair = c.guestIds.map((id) => id.toString()).sort().join("-")
+        constraints.repels.add(pair)
+      } else if (c.type === "attract") {
+        const pair = c.guestIds.map((id) => id.toString()).sort().join("-")
+        constraints.attracts.add(pair)
+      }
+    }
+
     const numberOfRounds = event.numberOfRounds || 1
     const numTables = Math.ceil(guests.length / event.tableSize)
 
@@ -571,12 +736,30 @@ export const assignTables = mutation({
       // Get previous round assignments for travel distance calculation
       const previousRoundAssignments = allRoundAssignments.get(roundNum - 1)
 
+      // Pre-assign pinned guests first (for all rounds)
+      const pinnedGuestIds = new Set<string>()
+      for (const [guestId, tableNum] of constraints.pins) {
+        if (tableNum > 0 && tableNum <= numTables) {
+          const guest = guests.find((g) => g._id.toString() === guestId)
+          if (guest && tables[tableNum - 1].length < event.tableSize) {
+            tables[tableNum - 1].push(guest)
+            roundAssignment.set(guest._id, tableNum)
+            pinnedGuestIds.add(guestId)
+          }
+        }
+      }
+
+      // Get remaining unpinned guests
+      const unpinnedGuests = guests.filter(
+        (g) => !pinnedGuestIds.has(g._id.toString())
+      )
+
       if (roundNum === 1) {
-        // Round 1: Use original department-mixing algorithm
+        // Round 1: Use department-mixing algorithm for unpinned guests
         const byDepartment: Record<string, GuestDoc[]> = {}
         const noDepartment: GuestDoc[] = []
 
-        for (const guest of guests) {
+        for (const guest of unpinnedGuests) {
           if (guest.department) {
             if (!byDepartment[guest.department]) {
               byDepartment[guest.department] = []
@@ -592,28 +775,39 @@ export const assignTables = mutation({
           byDepartment[dept] = shuffleArray(byDepartment[dept])
         }
 
-        // Round-robin distribution
+        // Round-robin distribution with constraint awareness
         const departments = shuffleArray(Object.keys(byDepartment))
         let tableIndex = 0
 
         for (const dept of departments) {
           for (const guest of byDepartment[dept]) {
-            let attempts = 0
-            while (attempts < numTables) {
-              const targetIdx = (tableIndex + attempts) % numTables
-              const targetTable = tables[targetIdx]
-              if (targetTable.length < event.tableSize) {
-                const sameDeptCount = targetTable.filter(
-                  (g) => g.department === guest.department
-                ).length
-                if (sameDeptCount < 2 || attempts === numTables - 1) {
-                  targetTable.push(guest)
-                  roundAssignment.set(guest._id, targetIdx + 1)
-                  tableIndex = (tableIndex + 1) % numTables
-                  break
-                }
+            // Use scoring to pick the best table (considering constraints)
+            let bestTable = -1
+            let bestScore = Infinity
+
+            for (let tableIdx = 0; tableIdx < numTables; tableIdx++) {
+              if (tables[tableIdx].length >= event.tableSize) continue
+
+              const score = calculateAssignmentScore(
+                guest,
+                tableIdx + 1,
+                tables[tableIdx],
+                tablemateHistory,
+                null,
+                matchingWeights,
+                constraints
+              )
+
+              if (score < bestScore) {
+                bestScore = score
+                bestTable = tableIdx
               }
-              attempts++
+            }
+
+            if (bestTable >= 0) {
+              tables[bestTable].push(guest)
+              roundAssignment.set(guest._id, bestTable + 1)
+              tableIndex = (bestTable + 1) % numTables
             }
           }
         }
@@ -621,19 +815,36 @@ export const assignTables = mutation({
         // Add guests without department
         const shuffledNoDept = shuffleArray(noDepartment)
         for (const guest of shuffledNoDept) {
-          for (let i = 0; i < numTables; i++) {
-            const idx = (tableIndex + i) % numTables
-            if (tables[idx].length < event.tableSize) {
-              tables[idx].push(guest)
-              roundAssignment.set(guest._id, idx + 1)
-              tableIndex = (idx + 1) % numTables
-              break
+          let bestTable = -1
+          let bestScore = Infinity
+
+          for (let tableIdx = 0; tableIdx < numTables; tableIdx++) {
+            if (tables[tableIdx].length >= event.tableSize) continue
+
+            const score = calculateAssignmentScore(
+              guest,
+              tableIdx + 1,
+              tables[tableIdx],
+              tablemateHistory,
+              null,
+              matchingWeights,
+              constraints
+            )
+
+            if (score < bestScore) {
+              bestScore = score
+              bestTable = tableIdx
             }
+          }
+
+          if (bestTable >= 0) {
+            tables[bestTable].push(guest)
+            roundAssignment.set(guest._id, bestTable + 1)
           }
         }
       } else {
-        // Rounds 2+: Use scoring algorithm
-        const shuffledGuests = shuffleArray([...guests])
+        // Rounds 2+: Use scoring algorithm with matching weights and constraints
+        const shuffledGuests = shuffleArray([...unpinnedGuests])
 
         for (const guest of shuffledGuests) {
           let bestTable = -1
@@ -649,7 +860,9 @@ export const assignTables = mutation({
               tableIdx + 1,
               tables[tableIdx],
               tablemateHistory,
-              previousTableNum
+              previousTableNum,
+              matchingWeights,
+              constraints
             )
 
             if (score < bestScore) {
@@ -789,5 +1002,67 @@ export const clearCustomTheme = mutation({
       themePreset: undefined,
       customColors: undefined,
     })
+  },
+})
+
+// Update email settings
+export const updateEmailSettings = mutation({
+  args: {
+    id: v.id("events"),
+    emailSettings: v.object({
+      senderName: v.string(),
+      replyTo: v.optional(v.string()),
+      invitationSubject: v.optional(v.string()),
+      confirmationSubject: v.optional(v.string()),
+    }),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.id, { emailSettings: args.emailSettings })
+  },
+})
+
+// Clear email settings
+export const clearEmailSettings = mutation({
+  args: { id: v.id("events") },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.id, { emailSettings: undefined })
+  },
+})
+
+// Update event type
+export const updateEventType = mutation({
+  args: {
+    id: v.id("events"),
+    eventType: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.id, { eventType: args.eventType })
+  },
+})
+
+// Update event type settings (custom terminology)
+export const updateEventTypeSettings = mutation({
+  args: {
+    id: v.id("events"),
+    eventTypeSettings: v.object({
+      guestLabel: v.string(),
+      guestLabelPlural: v.string(),
+      tableLabel: v.string(),
+      tableLabelPlural: v.string(),
+      departmentLabel: v.string(),
+      departmentLabelPlural: v.string(),
+      showRoundTimer: v.boolean(),
+    }),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.id, { eventTypeSettings: args.eventTypeSettings })
+  },
+})
+
+// Clear event type settings (revert to preset defaults)
+export const clearEventTypeSettings = mutation({
+  args: { id: v.id("events") },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.id, { eventTypeSettings: undefined })
   },
 })
