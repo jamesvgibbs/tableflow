@@ -87,12 +87,32 @@ convex/
 
 ## Environment Variables
 
-Create a `.env.local` file:
+### Next.js (.env.local)
 
 ```env
 CONVEX_DEPLOYMENT=your-deployment-name
 NEXT_PUBLIC_CONVEX_URL=https://your-deployment.convex.cloud
 ```
+
+### Convex Environment Variables
+
+For email functionality, set these in your Convex dashboard (Settings > Environment Variables):
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `RESEND_API_KEY` | API key from [resend.com](https://resend.com) | For emails |
+| `RESEND_WEBHOOK_SECRET` | Webhook signing secret from Resend | For delivery tracking |
+
+**Setting up Resend:**
+
+1. Create an account at [resend.com](https://resend.com)
+2. Go to API Keys and create a new key
+3. Copy the key and add it to Convex environment variables as `RESEND_API_KEY`
+4. For delivery tracking (optional):
+   - Go to Webhooks in Resend dashboard
+   - Add endpoint: `https://your-convex-deployment.convex.site/api/resend-webhook`
+   - Select events: `email.delivered`, `email.bounced`, `email.complained`
+   - Copy the signing secret and add as `RESEND_WEBHOOK_SECRET`
 
 ## License
 
