@@ -33,22 +33,31 @@ import {
 } from "@/lib/types"
 import type { SeatingEventType } from "@/lib/seating-types"
 
+export interface GuestFormData {
+  name: string
+  department?: string
+  email?: string
+  phone?: string
+  dietary?: DietaryInfo
+  attributes?: GuestAttributes
+  // Event-type specific fields
+  familyName?: string
+  side?: string
+  company?: string
+  team?: string
+  managementLevel?: string
+  isVip?: boolean
+}
+
 interface GuestFormProps {
-  onAddGuest: (guest: {
-    name: string
-    department?: string
-    email?: string
-    phone?: string
-    dietary?: DietaryInfo
-    attributes?: GuestAttributes
-    // Event-type specific fields
-    familyName?: string
-    side?: string
-    company?: string
-    team?: string
-    managementLevel?: string
-    isVip?: boolean
-  }) => void
+  /** Callback for creating a new guest (create mode) */
+  onAddGuest?: (guest: GuestFormData) => void
+  /** Callback for updating an existing guest (edit mode) */
+  onEditGuest?: (guest: GuestFormData) => void
+  /** Initial guest data for pre-filling the form (edit mode) */
+  initialGuest?: Partial<GuestFormData>
+  /** Form mode: 'create' for new guests, 'edit' for existing guests */
+  mode?: 'create' | 'edit'
   /** Custom label for the department field (default: "Department") */
   departmentLabel?: string
   /** Custom label for the guest (default: "Guest") - used in button text */
@@ -88,30 +97,63 @@ const SIDE_LABELS: Record<string, string> = {
 
 export function GuestForm({
   onAddGuest,
+  onEditGuest,
+  initialGuest,
+  mode = 'create',
   departmentLabel = "Department",
   guestLabel = "Guest",
   seatingType,
 }: GuestFormProps) {
-  const [name, setName] = React.useState("")
-  const [department, setDepartment] = React.useState("")
-  const [email, setEmail] = React.useState("")
-  const [phone, setPhone] = React.useState("")
-  const [dietaryRestrictions, setDietaryRestrictions] = React.useState<string[]>([])
-  const [dietaryNotes, setDietaryNotes] = React.useState("")
+  const [name, setName] = React.useState(initialGuest?.name ?? "")
+  const [department, setDepartment] = React.useState(initialGuest?.department ?? "")
+  const [email, setEmail] = React.useState(initialGuest?.email ?? "")
+  const [phone, setPhone] = React.useState(initialGuest?.phone ?? "")
+  const [dietaryRestrictions, setDietaryRestrictions] = React.useState<string[]>(
+    initialGuest?.dietary?.restrictions ?? []
+  )
+  const [dietaryNotes, setDietaryNotes] = React.useState(initialGuest?.dietary?.notes ?? "")
   const [error, setError] = React.useState("")
 
   // Matching attributes state
-  const [interests, setInterests] = React.useState<string[]>([])
-  const [jobLevel, setJobLevel] = React.useState<JobLevel | "">("")
-  const [goals, setGoals] = React.useState<NetworkingGoal[]>([])
+  const [interests, setInterests] = React.useState<string[]>(
+    initialGuest?.attributes?.interests ?? []
+  )
+  const [jobLevel, setJobLevel] = React.useState<JobLevel | "">(
+    (initialGuest?.attributes?.jobLevel as JobLevel) ?? ""
+  )
+  const [goals, setGoals] = React.useState<NetworkingGoal[]>(
+    (initialGuest?.attributes?.goals as NetworkingGoal[]) ?? []
+  )
 
   // Event-type specific state
-  const [familyName, setFamilyName] = React.useState("")
-  const [side, setSide] = React.useState("")
-  const [company, setCompany] = React.useState("")
-  const [team, setTeam] = React.useState("")
-  const [managementLevel, setManagementLevel] = React.useState("")
-  const [isVip, setIsVip] = React.useState(false)
+  const [familyName, setFamilyName] = React.useState(initialGuest?.familyName ?? "")
+  const [side, setSide] = React.useState(initialGuest?.side ?? "")
+  const [company, setCompany] = React.useState(initialGuest?.company ?? "")
+  const [team, setTeam] = React.useState(initialGuest?.team ?? "")
+  const [managementLevel, setManagementLevel] = React.useState(initialGuest?.managementLevel ?? "")
+  const [isVip, setIsVip] = React.useState(initialGuest?.isVip ?? false)
+
+  // Reset form when initialGuest changes (for switching between guests in edit mode)
+  React.useEffect(() => {
+    if (initialGuest) {
+      setName(initialGuest.name ?? "")
+      setDepartment(initialGuest.department ?? "")
+      setEmail(initialGuest.email ?? "")
+      setPhone(initialGuest.phone ?? "")
+      setDietaryRestrictions(initialGuest.dietary?.restrictions ?? [])
+      setDietaryNotes(initialGuest.dietary?.notes ?? "")
+      setInterests(initialGuest.attributes?.interests ?? [])
+      setJobLevel((initialGuest.attributes?.jobLevel as JobLevel) ?? "")
+      setGoals((initialGuest.attributes?.goals as NetworkingGoal[]) ?? [])
+      setFamilyName(initialGuest.familyName ?? "")
+      setSide(initialGuest.side ?? "")
+      setCompany(initialGuest.company ?? "")
+      setTeam(initialGuest.team ?? "")
+      setManagementLevel(initialGuest.managementLevel ?? "")
+      setIsVip(initialGuest.isVip ?? false)
+      setError("")
+    }
+  }, [initialGuest])
 
   const handleDietaryChange = (restriction: string, checked: boolean) => {
     setDietaryRestrictions(prev =>
@@ -169,8 +211,8 @@ export function GuestForm({
         }
       : undefined
 
-    // Call callback with guest data
-    onAddGuest({
+    // Build guest data object
+    const guestData: GuestFormData = {
       name: trimmedName,
       department: department.trim() || undefined,
       email: email.trim() || undefined,
@@ -184,25 +226,32 @@ export function GuestForm({
       team: team.trim() || undefined,
       managementLevel: managementLevel || undefined,
       isVip: isVip || undefined,
-    })
+    }
 
-    // Clear form
-    setName("")
-    setDepartment("")
-    setEmail("")
-    setPhone("")
-    setDietaryRestrictions([])
-    setDietaryNotes("")
-    setInterests([])
-    setJobLevel("")
-    setGoals([])
-    // Clear event-type specific fields
-    setFamilyName("")
-    setSide("")
-    setCompany("")
-    setTeam("")
-    setManagementLevel("")
-    setIsVip(false)
+    // Call the appropriate callback based on mode
+    if (mode === 'edit' && onEditGuest) {
+      onEditGuest(guestData)
+      // Don't clear form in edit mode - the dialog will close
+    } else if (onAddGuest) {
+      onAddGuest(guestData)
+      // Clear form after adding in create mode
+      setName("")
+      setDepartment("")
+      setEmail("")
+      setPhone("")
+      setDietaryRestrictions([])
+      setDietaryNotes("")
+      setInterests([])
+      setJobLevel("")
+      setGoals([])
+      // Clear event-type specific fields
+      setFamilyName("")
+      setSide("")
+      setCompany("")
+      setTeam("")
+      setManagementLevel("")
+      setIsVip(false)
+    }
   }
 
   return (
@@ -500,7 +549,7 @@ export function GuestForm({
       </Accordion>
 
       <Button type="submit" className="w-full">
-        Add them
+        {mode === 'edit' ? 'Save changes' : 'Add them'}
       </Button>
     </form>
   )

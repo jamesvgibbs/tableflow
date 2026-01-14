@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { useQuery, useMutation } from 'convex/react'
 import { api } from '@convex/_generated/api'
-import { Id } from '@convex/_generated/dataModel'
+import { Id, Doc } from '@convex/_generated/dataModel'
 import {
   ArrowLeft,
   Users,
@@ -28,16 +28,19 @@ import {
   Settings,
   Maximize,
   Minimize,
+  Pencil,
 } from 'lucide-react'
 import JSZip from 'jszip'
 
 import { generateQrCodeBlob } from '@/lib/qr-download'
 import { cn } from '@/lib/utils'
 import { resolveThemeColors } from '@/lib/theme-presets'
-import { getTableLabel, getTableLabelPlural, getGuestLabel, getGuestLabelPlural } from '@/lib/terminology'
+import { getTableLabel, getTableLabelPlural, getGuestLabel, getGuestLabelPlural, getDepartmentLabel } from '@/lib/terminology'
+import { type DietaryInfo } from '@/lib/types'
 
 import { TableCard } from '@/components/table-card'
 import { GuestCard } from '@/components/guest-card'
+import { GuestForm } from '@/components/guest-form'
 import { EventThemeProvider } from '@/components/event-theme-provider'
 import { ThemeColors } from '@/lib/theme-presets'
 
@@ -54,6 +57,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 
 // WCAG contrast calculation functions
 function getLuminance(hex: string): number {
@@ -265,6 +275,9 @@ export default function LiveEventPage({ params }: PageProps) {
   // Active tab for themed tabs
   const [activeTab, setActiveTab] = React.useState('by-table')
 
+  // Edit guest state
+  const [editingGuest, setEditingGuest] = React.useState<Doc<'guests'> | null>(null)
+
   // Load params on mount
   React.useEffect(() => {
     async function loadParams() {
@@ -290,6 +303,10 @@ export default function LiveEventPage({ params }: PageProps) {
       ? { eventId }
       : 'skip'
   )
+  const matchingConfig = useQuery(
+    api.matchingConfig.getByEvent,
+    eventId ? { eventId } : 'skip'
+  )
 
   // Convex mutations
   const updateRoundSettings = useMutation(api.events.updateRoundSettings)
@@ -300,6 +317,7 @@ export default function LiveEventPage({ params }: PageProps) {
   const resumeRound = useMutation(api.events.resumeRound)
   const checkInGuest = useMutation(api.guests.checkIn)
   const uncheckInGuest = useMutation(api.guests.uncheckIn)
+  const updateGuest = useMutation(api.guests.update)
 
   // Sync event data with state when loaded
   React.useEffect(() => {
@@ -544,6 +562,54 @@ export default function LiveEventPage({ params }: PageProps) {
       }
     },
     [uncheckInGuest]
+  )
+
+  // Edit guest
+  const handleEditGuest = React.useCallback(
+    async (guestData: {
+      name: string
+      department?: string
+      email?: string
+      phone?: string
+      dietary?: DietaryInfo
+      attributes?: {
+        interests?: string[]
+        jobLevel?: string
+        goals?: string[]
+        customTags?: string[]
+      }
+      familyName?: string
+      side?: string
+      company?: string
+      team?: string
+      managementLevel?: string
+      isVip?: boolean
+    }) => {
+      if (!editingGuest) return
+
+      try {
+        await updateGuest({
+          id: editingGuest._id,
+          name: guestData.name,
+          department: guestData.department,
+          email: guestData.email,
+          phone: guestData.phone,
+          dietary: guestData.dietary,
+          attributes: guestData.attributes,
+          familyName: guestData.familyName,
+          side: guestData.side,
+          company: guestData.company,
+          team: guestData.team,
+          managementLevel: guestData.managementLevel,
+          isVip: guestData.isVip,
+        })
+        toast.success(`Updated ${guestData.name}.`)
+        setEditingGuest(null)
+      } catch {
+        toast.error('I could not update this guest.')
+      }
+    },
+    [editingGuest, updateGuest]
   )
 
   // Resolve theme colors
@@ -1263,6 +1329,7 @@ export default function LiveEventPage({ params }: PageProps) {
                           baseUrl={baseUrl}
                           roundAssignments={guestRoundAssignments}
                           themeColors={themeColors}
+                          onEdit={() => setEditingGuest(guest)}
                         />
                       )
                     })
@@ -1435,7 +1502,16 @@ export default function LiveEventPage({ params }: PageProps) {
                                   </div>
                                 </div>
                               </div>
-                              <div className="shrink-0 ml-4">
+                              <div className="flex items-center gap-2 shrink-0 ml-4">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => setEditingGuest(guest)}
+                                  className="size-8 opacity-60 hover:opacity-100 transition-opacity"
+                                  style={themedStyles?.cardText}
+                                >
+                                  <Pencil className="size-4" />
+                                </Button>
                                 {guest.checkedIn ? (
                                   <Button
                                     variant="ghost"
@@ -1476,6 +1552,46 @@ export default function LiveEventPage({ params }: PageProps) {
             </Tabs>
           </div>
         </div>
+
+        {/* Edit Guest Dialog */}
+        <Dialog open={editingGuest !== null} onOpenChange={(open) => !open && setEditingGuest(null)}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Edit {getGuestLabel(event)}</DialogTitle>
+              <DialogDescription>
+                Update their information. Changes save immediately.
+              </DialogDescription>
+            </DialogHeader>
+            {editingGuest && (
+              <GuestForm
+                mode="edit"
+                initialGuest={{
+                  name: editingGuest.name,
+                  department: editingGuest.department ?? undefined,
+                  email: editingGuest.email ?? undefined,
+                  phone: editingGuest.phone ?? undefined,
+                  dietary: editingGuest.dietary ?? undefined,
+                  attributes: editingGuest.attributes as {
+                    interests?: string[]
+                    jobLevel?: 'junior' | 'mid' | 'senior' | 'executive'
+                    goals?: ('find-mentor' | 'recruit' | 'learn' | 'network' | 'partner' | 'sell' | 'invest')[]
+                    customTags?: string[]
+                  } | undefined,
+                  familyName: editingGuest.familyName ?? undefined,
+                  side: editingGuest.side ?? undefined,
+                  company: editingGuest.company ?? undefined,
+                  team: editingGuest.team ?? undefined,
+                  managementLevel: editingGuest.managementLevel ?? undefined,
+                  isVip: editingGuest.isVip ?? undefined,
+                }}
+                onEditGuest={handleEditGuest}
+                departmentLabel={getDepartmentLabel(event)}
+                guestLabel={getGuestLabel(event)}
+                seatingType={matchingConfig?.seatingType as 'wedding' | 'corporate' | 'networking' | 'team' | 'social' | 'custom' | null | undefined}
+              />
+            )}
+          </DialogContent>
+        </Dialog>
       </TooltipProvider>
     </EventThemeProvider>
   )

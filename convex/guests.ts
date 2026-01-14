@@ -302,6 +302,13 @@ export const update = mutation({
       goals: v.optional(v.array(v.string())),
       customTags: v.optional(v.array(v.string())),
     })),
+    // Event-type specific fields
+    familyName: v.optional(v.string()),
+    side: v.optional(v.string()),
+    company: v.optional(v.string()),
+    team: v.optional(v.string()),
+    managementLevel: v.optional(v.string()),
+    isVip: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const { id, ...updates } = args

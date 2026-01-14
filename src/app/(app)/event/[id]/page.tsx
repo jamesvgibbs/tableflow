@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { useQuery, useMutation } from "convex/react"
 import { api } from "@convex/_generated/api"
-import { Id } from "@convex/_generated/dataModel"
+import { Id, Doc } from "@convex/_generated/dataModel"
 import {
   ArrowLeft,
   Users,
@@ -139,6 +139,7 @@ export default function EventPage({ params }: PageProps) {
   const [showResetDialog, setShowResetDialog] = React.useState(false)
   const [showAddGuestsDialog, setShowAddGuestsDialog] = React.useState(false)
   const [showSettingsSheet, setShowSettingsSheet] = React.useState(false)
+  const [editingGuest, setEditingGuest] = React.useState<Doc<"guests"> | null>(null)
 
   // Hover state for themed buttons
   const [hoveredButton, setHoveredButton] = React.useState<string | null>(null)
@@ -161,6 +162,10 @@ export default function EventPage({ params }: PageProps) {
     api.guests.getByEvent,
     eventId ? { eventId } : "skip"
   )
+  const matchingConfig = useQuery(
+    api.matchingConfig.getByEvent,
+    eventId ? { eventId } : "skip"
+  )
 
   // Convex mutations
   const updateEventName = useMutation(api.events.updateName)
@@ -175,6 +180,7 @@ export default function EventPage({ params }: PageProps) {
   const addGuests = useMutation(api.guests.createMany)
   const removeGuest = useMutation(api.guests.remove)
   const removeAllGuests = useMutation(api.guests.removeAllFromEvent)
+  const updateGuest = useMutation(api.guests.update)
   const assignTablesMutation = useMutation(api.events.assignTables)
   const resetAssignmentsMutation = useMutation(api.events.resetAssignments)
 
@@ -246,6 +252,54 @@ export default function EventPage({ params }: PageProps) {
       }
     },
     [removeGuest]
+  )
+
+  // Edit guest
+  const handleEditGuest = React.useCallback(
+    async (guestData: {
+      name: string
+      department?: string
+      email?: string
+      phone?: string
+      dietary?: DietaryInfo
+      attributes?: {
+        interests?: string[]
+        jobLevel?: string
+        goals?: string[]
+        customTags?: string[]
+      }
+      familyName?: string
+      side?: string
+      company?: string
+      team?: string
+      managementLevel?: string
+      isVip?: boolean
+    }) => {
+      if (!editingGuest) return
+
+      try {
+        await updateGuest({
+          id: editingGuest._id,
+          name: guestData.name,
+          department: guestData.department,
+          email: guestData.email,
+          phone: guestData.phone,
+          dietary: guestData.dietary,
+          attributes: guestData.attributes,
+          familyName: guestData.familyName,
+          side: guestData.side,
+          company: guestData.company,
+          team: guestData.team,
+          managementLevel: guestData.managementLevel,
+          isVip: guestData.isVip,
+        })
+        toast.success(`Updated ${guestData.name}.`)
+        setEditingGuest(null)
+      } catch {
+        toast.error("I could not update this guest.")
+      }
+    },
+    [editingGuest, updateGuest]
   )
 
   // Clear all guests
@@ -1000,15 +1054,26 @@ export default function EventPage({ params }: PageProps) {
                                     )}
                                   </div>
                                 </div>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => handleRemoveGuest(guest._id)}
-                                  className="ml-2 shrink-0 size-8 opacity-0 group-hover:opacity-100 transition-opacity"
-                                  style={themedStyles?.cardText}
-                                >
-                                  <X className="size-3" />
-                                </Button>
+                                <div className="flex items-center gap-1 ml-2 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => setEditingGuest(guest)}
+                                    className="size-8"
+                                    style={themedStyles?.cardText}
+                                  >
+                                    <Pencil className="size-3" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleRemoveGuest(guest._id)}
+                                    className="size-8"
+                                    style={themedStyles?.cardText}
+                                  >
+                                    <X className="size-3" />
+                                  </Button>
+                                </div>
                               </div>
                             )
                           })}
@@ -1135,6 +1200,46 @@ export default function EventPage({ params }: PageProps) {
                 />
               </TabsContent>
             </Tabs>
+          </DialogContent>
+        </Dialog>
+
+        {/* Edit Guest Dialog */}
+        <Dialog open={editingGuest !== null} onOpenChange={(open) => !open && setEditingGuest(null)}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Edit {getGuestLabel(event)}</DialogTitle>
+              <DialogDescription>
+                Update their information. Changes save immediately.
+              </DialogDescription>
+            </DialogHeader>
+            {editingGuest && (
+              <GuestForm
+                mode="edit"
+                initialGuest={{
+                  name: editingGuest.name,
+                  department: editingGuest.department ?? undefined,
+                  email: editingGuest.email ?? undefined,
+                  phone: editingGuest.phone ?? undefined,
+                  dietary: editingGuest.dietary ?? undefined,
+                  attributes: editingGuest.attributes as {
+                    interests?: string[]
+                    jobLevel?: 'junior' | 'mid' | 'senior' | 'executive'
+                    goals?: ('find-mentor' | 'recruit' | 'learn' | 'network' | 'partner' | 'sell' | 'invest')[]
+                    customTags?: string[]
+                  } | undefined,
+                  familyName: editingGuest.familyName ?? undefined,
+                  side: editingGuest.side ?? undefined,
+                  company: editingGuest.company ?? undefined,
+                  team: editingGuest.team ?? undefined,
+                  managementLevel: editingGuest.managementLevel ?? undefined,
+                  isVip: editingGuest.isVip ?? undefined,
+                }}
+                onEditGuest={handleEditGuest}
+                departmentLabel={getDepartmentLabel(event)}
+                guestLabel={getGuestLabel(event)}
+                seatingType={matchingConfig?.seatingType as 'wedding' | 'corporate' | 'networking' | 'team' | 'social' | 'custom' | null | undefined}
+              />
+            )}
           </DialogContent>
         </Dialog>
 

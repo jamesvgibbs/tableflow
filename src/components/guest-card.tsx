@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
-import { Download, QrCode, ChevronDown, ChevronUp, CheckCircle2 } from 'lucide-react'
+import { Download, QrCode, ChevronDown, ChevronUp, CheckCircle2, Pencil } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -47,6 +47,7 @@ export interface GuestCardProps {
   baseUrl: string
   roundAssignments?: GuestRoundAssignment[]
   onDownload?: () => void
+  onEdit?: () => void
   themeColors?: ThemeColors
 }
 
@@ -56,6 +57,7 @@ export function GuestCard({
   baseUrl,
   roundAssignments,
   onDownload,
+  onEdit,
   themeColors
 }: GuestCardProps) {
   const [showQr, setShowQr] = useState(false)
@@ -113,7 +115,7 @@ export function GuestCard({
 
   return (
     <Card
-      className="w-full max-w-md overflow-hidden transition-all duration-200 hover:shadow-lg"
+      className="w-full max-w-md overflow-hidden transition-all duration-200 hover:shadow-lg group"
       style={themeColors ? {
         backgroundColor: cardBg,
         borderColor: `${themeColors.muted}60`,
@@ -137,6 +139,17 @@ export function GuestCard({
               >
                 {guest.name}
               </h3>
+              {onEdit && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={onEdit}
+                  className="size-7 shrink-0 opacity-60 hover:opacity-100 transition-opacity"
+                  style={themeColors ? { color: cardText } : undefined}
+                >
+                  <Pencil className="size-3.5" />
+                </Button>
+              )}
               {guest.checkedIn && (
                 <Badge
                   variant="outline"
