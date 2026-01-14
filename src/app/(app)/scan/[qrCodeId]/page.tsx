@@ -9,6 +9,8 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Loader2, UserCircle, Users, CheckCircle2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { DietaryBadges } from '@/components/dietary-badge'
+import { getTableLabel, getGuestLabelPlural } from '@/lib/terminology'
 
 interface ScanPageProps {
   params: Promise<{ qrCodeId: string }>
@@ -42,9 +44,9 @@ export default function ScanPage({ params }: ScanPageProps) {
     setIsCheckingIn(true)
     try {
       await checkInMutation({ id: guestId as Id<'guests'> })
-      toast.success('Successfully checked in!')
+      toast.success('You are in. Welcome.')
     } catch {
-      toast.error('Failed to check in')
+      toast.error('I could not check you in.')
     } finally {
       setIsCheckingIn(false)
     }
@@ -57,7 +59,7 @@ export default function ScanPage({ params }: ScanPageProps) {
         <Card className="w-full max-w-lg">
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
-            <p className="text-lg text-muted-foreground">Looking up your table...</p>
+            <p className="text-lg text-muted-foreground">Let me find your seat...</p>
           </CardContent>
         </Card>
       </div>
@@ -73,9 +75,9 @@ export default function ScanPage({ params }: ScanPageProps) {
             <div className="mx-auto mb-4 w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center">
               <UserCircle className="h-8 w-8 text-destructive" />
             </div>
-            <CardTitle className="text-2xl">Assignment Not Found</CardTitle>
+            <CardTitle className="text-2xl">I cannot find this code</CardTitle>
             <CardDescription className="text-base mt-2">
-              This QR code is invalid or the event has been deleted.
+              This code is not in my system. It may be old, or the event was removed.
             </CardDescription>
           </CardHeader>
         </Card>
@@ -100,6 +102,11 @@ export default function ScanPage({ params }: ScanPageProps) {
                 <Badge variant="secondary" className="text-sm px-3 py-1">
                   {guest.department}
                 </Badge>
+              )}
+              {guest.dietary && (
+                <div className="flex justify-center mt-2">
+                  <DietaryBadges dietary={guest.dietary} compact={false} />
+                </div>
               )}
             </div>
           </CardHeader>
@@ -142,7 +149,7 @@ export default function ScanPage({ params }: ScanPageProps) {
                         <div className={`text-3xl font-bold ${
                           isCurrentRound ? 'text-primary' : 'text-foreground'
                         }`}>
-                          Table {assignment.tableNumber}
+                          {getTableLabel(event)} {assignment.tableNumber}
                         </div>
                       </div>
                     )
@@ -159,7 +166,7 @@ export default function ScanPage({ params }: ScanPageProps) {
                   {guest.tableNumber || '?'}
                 </div>
                 <p className="text-lg text-muted-foreground mt-2">
-                  Table {guest.tableNumber || 'Unassigned'}
+                  {getTableLabel(event)} {guest.tableNumber || 'Unassigned'}
                 </p>
               </div>
             )}
@@ -206,7 +213,7 @@ export default function ScanPage({ params }: ScanPageProps) {
         <Card className="w-full max-w-lg">
           <CardHeader className="text-center pb-6">
             <p className="text-sm text-muted-foreground mb-2">{event?.name}</p>
-            <CardTitle className="text-4xl">Table {table.tableNumber}</CardTitle>
+            <CardTitle className="text-4xl">{getTableLabel(event)} {table.tableNumber}</CardTitle>
             <CardDescription className="text-base mt-2 flex items-center justify-center gap-2">
               <Users className="h-4 w-4" />
               <span>{checkedInCount}/{table.guests.length} Checked In</span>
@@ -216,7 +223,7 @@ export default function ScanPage({ params }: ScanPageProps) {
           <CardContent>
             <div className="space-y-3">
               <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-4">
-                Guests at this table
+                {getGuestLabelPlural(event)} at this {getTableLabel(event).toLowerCase()}
               </p>
               <div className="space-y-2">
                 {table.guests.map((guest) => (
@@ -232,7 +239,10 @@ export default function ScanPage({ params }: ScanPageProps) {
                       )}
                       <span className="font-medium">{guest.name}</span>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap justify-end">
+                      {guest.dietary && (
+                        <DietaryBadges dietary={guest.dietary} compact maxVisible={1} />
+                      )}
                       {guest.department && (
                         <Badge variant="outline" className="text-xs">
                           {guest.department}

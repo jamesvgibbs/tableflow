@@ -34,6 +34,7 @@ import JSZip from 'jszip'
 import { generateQrCodeBlob } from '@/lib/qr-download'
 import { cn } from '@/lib/utils'
 import { resolveThemeColors } from '@/lib/theme-presets'
+import { getTableLabel, getTableLabelPlural, getGuestLabel, getGuestLabelPlural } from '@/lib/terminology'
 
 import { TableCard } from '@/components/table-card'
 import { GuestCard } from '@/components/guest-card'
@@ -102,6 +103,8 @@ function getThemedStyles(themeColors: ThemeColors | undefined) {
   if (!themeColors) return null
 
   const pageTextColor = getAccessibleTextColor(themeColors.background, themeColors.foreground)
+  // Force recalculate without preference for elements that need guaranteed contrast
+  const pageTextColorStrong = getAccessibleTextColor(themeColors.background)
   const pageTextMuted = getAccessibleMutedColor(themeColors.background)
   const cardTextColor = getAccessibleTextColor(themeColors.secondary)
   const cardTextMuted = getAccessibleMutedColor(themeColors.secondary)
@@ -109,6 +112,7 @@ function getThemedStyles(themeColors: ThemeColors | undefined) {
   // Tab colors - use muted background for tab list, calculate text colors for that background
   const tabsListBg = themeColors.muted
   const tabsTextMuted = getAccessibleMutedColor(tabsListBg)
+  const tabsTextStrong = getAccessibleTextColor(tabsListBg)
 
   return {
     page: {
@@ -135,13 +139,13 @@ function getThemedStyles(themeColors: ThemeColors | undefined) {
     },
     outlineButton: {
       backgroundColor: 'transparent',
-      color: pageTextColor,
-      borderColor: `${pageTextColor}40`,
+      color: pageTextColorStrong,
+      borderColor: `${pageTextColorStrong}40`,
     },
     outlineButtonHover: {
-      backgroundColor: `${pageTextColor}15`,
-      color: pageTextColor,
-      borderColor: `${pageTextColor}40`,
+      backgroundColor: `${pageTextColorStrong}15`,
+      color: pageTextColorStrong,
+      borderColor: `${pageTextColorStrong}40`,
     },
     // Outline button when placed on card background
     outlineButtonOnCard: {
@@ -197,7 +201,7 @@ function getThemedStyles(themeColors: ThemeColors | undefined) {
       backgroundColor: tabsListBg,
     },
     tabTrigger: {
-      color: tabsTextMuted,
+      color: tabsTextStrong,
       backgroundColor: 'transparent',
     },
     tabTriggerActive: {
@@ -318,7 +322,7 @@ export default function LiveEventPage({ params }: PageProps) {
       try {
         await updateRoundSettings({ id: eventId, roundDuration: newDuration || 0 })
       } catch {
-        toast.error('Failed to update duration')
+        toast.error('I could not update the duration.')
       }
     },
     [eventId, updateRoundSettings]
@@ -331,7 +335,7 @@ export default function LiveEventPage({ params }: PageProps) {
     try {
       const result = await startNextRound({ id: eventId })
       setSelectedRound(result.currentRound)
-      toast.success(`Started Round ${result.currentRound}`)
+      toast.success(`Round ${result.currentRound} has begun.`)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to start round')
     }
@@ -343,7 +347,7 @@ export default function LiveEventPage({ params }: PageProps) {
 
     try {
       const result = await endCurrentRound({ id: eventId })
-      toast.success(`Ended Round ${result.endedRound}`)
+      toast.success(`Round ${result.endedRound} is complete.`)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to end round')
     }
@@ -356,7 +360,7 @@ export default function LiveEventPage({ params }: PageProps) {
     try {
       await resetRounds({ id: eventId })
       setSelectedRound(1)
-      toast.success('Rounds reset to start')
+      toast.success('Back to the beginning.')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to reset rounds')
     }
@@ -368,7 +372,7 @@ export default function LiveEventPage({ params }: PageProps) {
 
     try {
       await pauseRound({ id: eventId })
-      toast.success('Round paused')
+      toast.success('Paused.')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to pause round')
     }
@@ -380,7 +384,7 @@ export default function LiveEventPage({ params }: PageProps) {
 
     try {
       await resumeRound({ id: eventId })
-      toast.success('Round resumed')
+      toast.success('Resumed.')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to resume round')
     }
@@ -443,12 +447,12 @@ export default function LiveEventPage({ params }: PageProps) {
     const assignedGuests = guests.filter((g) => g.tableNumber && g.qrCodeId)
 
     if (assignedGuests.length === 0) {
-      toast.error('No guest cards to download')
+      toast.error('I have no cards to download.')
       return
     }
 
     setIsDownloadingAll(true)
-    toast.info(`Generating ${assignedGuests.length} guest cards...`)
+    toast.info(`Making ${assignedGuests.length} cards...`)
 
     try {
       const zip = new JSZip()
@@ -477,10 +481,10 @@ export default function LiveEventPage({ params }: PageProps) {
       link.click()
       URL.revokeObjectURL(url)
 
-      toast.success(`Downloaded ${assignedGuests.length} guest cards`)
+      toast.success(`Done. ${assignedGuests.length} cards ready.`)
     } catch (error) {
       console.error('Error generating ZIP:', error)
-      toast.error('Failed to generate cards')
+      toast.error('I could not make the cards.')
     } finally {
       setIsDownloadingAll(false)
     }
@@ -521,9 +525,9 @@ export default function LiveEventPage({ params }: PageProps) {
     async (guestId: string) => {
       try {
         await checkInGuest({ id: guestId as Id<'guests'> })
-        toast.success('Guest checked in')
+        toast.success('Checked in.')
       } catch {
-        toast.error('Failed to check in guest')
+        toast.error('I could not check them in.')
       }
     },
     [checkInGuest]
@@ -534,9 +538,9 @@ export default function LiveEventPage({ params }: PageProps) {
     async (guestId: string) => {
       try {
         await uncheckInGuest({ id: guestId as Id<'guests'> })
-        toast.success('Check-in undone')
+        toast.success('Undone.')
       } catch {
-        toast.error('Failed to undo check-in')
+        toast.error('I could not undo that.')
       }
     },
     [uncheckInGuest]
@@ -552,7 +556,7 @@ export default function LiveEventPage({ params }: PageProps) {
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center space-y-2">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-          <p className="text-sm text-muted-foreground">Loading event...</p>
+          <p className="text-sm text-muted-foreground">Fetching your event...</p>
         </div>
       </div>
     )
@@ -564,11 +568,11 @@ export default function LiveEventPage({ params }: PageProps) {
       <div className="min-h-screen flex items-center justify-center p-4">
         <Card className="max-w-md w-full">
           <CardHeader>
-            <CardTitle>Event Not Found</CardTitle>
+            <CardTitle>I cannot find this event</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-muted-foreground">
-              The event you&apos;re looking for doesn&apos;t exist or has been deleted.
+              This event does not exist, or it wandered off. I am not sure which.
             </p>
             <Button onClick={() => router.push('/admin')} className="w-full">
               <ArrowLeft className="mr-2 size-4" />
@@ -586,11 +590,11 @@ export default function LiveEventPage({ params }: PageProps) {
       <div className="min-h-screen flex items-center justify-center p-4">
         <Card className="max-w-md w-full">
           <CardHeader>
-            <CardTitle>Tables Not Assigned</CardTitle>
+            <CardTitle>{getTableLabelPlural(event)} Not Assigned</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-muted-foreground">
-              Tables need to be assigned before you can run the live event. Go to the event settings to add guests and randomize tables.
+              {getTableLabelPlural(event)} need to be assigned before you can run the live event. Go to the event settings to add {getGuestLabelPlural(event).toLowerCase()} and randomize {getTableLabelPlural(event).toLowerCase()}.
             </p>
             <Button onClick={() => router.push(`/event/${eventId}`)} className="w-full">
               <Settings className="mr-2 size-4" />
@@ -1089,7 +1093,7 @@ export default function LiveEventPage({ params }: PageProps) {
                         className="gap-2 transition-colors"
                         onClick={() => {
                           navigator.clipboard.writeText(`${baseUrl}/timer/${eventId}`)
-                          toast.success('Timer link copied!')
+                          toast.success('Copied.')
                         }}
                         style={themedStyles?.cardTextMuted}
                       >
@@ -1129,7 +1133,7 @@ export default function LiveEventPage({ params }: PageProps) {
                     : undefined
                   }
                 >
-                  By Table
+                  By {getTableLabel(event)}
                 </TabsTrigger>
                 <TabsTrigger
                   value="by-guest"
@@ -1140,7 +1144,7 @@ export default function LiveEventPage({ params }: PageProps) {
                     : undefined
                   }
                 >
-                  By Guest
+                  By {getGuestLabel(event)}
                 </TabsTrigger>
                 <TabsTrigger
                   value="attendance"
@@ -1230,7 +1234,7 @@ export default function LiveEventPage({ params }: PageProps) {
                   {filteredGuests.length === 0 ? (
                     <div className="col-span-full text-center py-8" style={themedStyles?.pageTextMuted}>
                       <Users className="size-12 mx-auto mb-2 opacity-20" />
-                      <p>No guests found</p>
+                      <p>I do not see any guests.</p>
                     </div>
                   ) : (
                     filteredGuests.map((guest) => {
@@ -1279,7 +1283,7 @@ export default function LiveEventPage({ params }: PageProps) {
                         <div className="text-4xl" style={{ color: themedStyles ? `${themedStyles.cardTextMuted.color}50` : 'var(--muted-foreground)' }}>/</div>
                         <div className="text-center">
                           <p className="text-3xl font-bold" style={themedStyles?.cardText}>{checkInStats.total}</p>
-                          <p className="text-sm" style={themedStyles?.cardTextMuted}>Total Guests</p>
+                          <p className="text-sm" style={themedStyles?.cardTextMuted}>Total {getGuestLabelPlural(event)}</p>
                         </div>
                       </div>
                       <div className="text-center sm:text-right">
@@ -1323,8 +1327,8 @@ export default function LiveEventPage({ params }: PageProps) {
                     onMouseEnter={() => setHoveredButton('filterAll')}
                     onMouseLeave={() => setHoveredButton(null)}
                   >
-                    <Users className="size-4" />
-                    All ({guests?.length || 0})
+                    <Users className="size-4" style={themedStyles && attendanceFilter !== 'all' ? { color: 'inherit' } : undefined} />
+                    <span>All ({guests?.length || 0})</span>
                   </Button>
                   <Button
                     variant={attendanceFilter === 'waiting' ? 'default' : 'outline'}
@@ -1344,8 +1348,8 @@ export default function LiveEventPage({ params }: PageProps) {
                     onMouseEnter={() => setHoveredButton('filterWaiting')}
                     onMouseLeave={() => setHoveredButton(null)}
                   >
-                    <Clock className="size-4" />
-                    Waiting ({checkInStats.total - checkInStats.checkedIn})
+                    <Clock className="size-4" style={themedStyles && attendanceFilter !== 'waiting' ? { color: 'inherit' } : undefined} />
+                    <span>Waiting ({checkInStats.total - checkInStats.checkedIn})</span>
                   </Button>
                   <Button
                     variant={attendanceFilter === 'checked-in' ? 'default' : 'outline'}
@@ -1365,8 +1369,8 @@ export default function LiveEventPage({ params }: PageProps) {
                     onMouseEnter={() => setHoveredButton('filterCheckedIn')}
                     onMouseLeave={() => setHoveredButton(null)}
                   >
-                    <CheckCircle2 className="size-4" />
-                    Checked In ({checkInStats.checkedIn})
+                    <CheckCircle2 className="size-4" style={themedStyles && attendanceFilter !== 'checked-in' ? { color: 'inherit' } : undefined} />
+                    <span>Checked In ({checkInStats.checkedIn})</span>
                   </Button>
                 </div>
 
@@ -1375,7 +1379,7 @@ export default function LiveEventPage({ params }: PageProps) {
                     {attendanceGuests.length === 0 ? (
                       <div className="text-center py-12" style={themedStyles?.cardTextMuted}>
                         <Users className="size-12 mx-auto mb-2 opacity-20" />
-                        <p>No guests match this filter</p>
+                        <p>No one matches this filter.</p>
                       </div>
                     ) : (
                       <div
@@ -1398,7 +1402,7 @@ export default function LiveEventPage({ params }: PageProps) {
                               .map((a: ConvexRoundAssignment) => `R${a.roundNumber}: T${a.tableNumber}`)
                               .join(' • ')
                           } else if (guest.tableNumber) {
-                            tableDisplay = `Table ${guest.tableNumber}`
+                            tableDisplay = `${getTableLabel(event)} ${guest.tableNumber}`
                           }
 
                           return (
@@ -1447,7 +1451,14 @@ export default function LiveEventPage({ params }: PageProps) {
                                     size="sm"
                                     onClick={() => handleManualCheckIn(guest._id)}
                                     className="gap-1.5"
-                                    style={themedStyles ? { ...themedStyles.outlineButton, borderColor: themedStyles.cardTextMuted.color + '40' } : undefined}
+                                    style={themedStyles
+                                      ? hoveredButton === `checkin-${guest._id}`
+                                        ? themedStyles.outlineButtonOnCardHover
+                                        : themedStyles.outlineButtonOnCard
+                                      : undefined
+                                    }
+                                    onMouseEnter={() => setHoveredButton(`checkin-${guest._id}`)}
+                                    onMouseLeave={() => setHoveredButton(null)}
                                   >
                                     <CheckCircle2 className="size-4" />
                                     Check In

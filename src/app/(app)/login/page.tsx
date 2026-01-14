@@ -29,7 +29,7 @@ export default function LoginPage() {
     e.preventDefault()
 
     if (!username.trim() || !password.trim()) {
-      toast.error("Please enter username and password")
+      toast.error("I need both username and password.")
       return
     }
 
@@ -39,13 +39,13 @@ export default function LoginPage() {
       const success = await login(username, password)
 
       if (success) {
-        toast.success("Welcome back!")
+        toast.success("Welcome back. I missed you.")
         router.push("/admin")
       } else {
-        toast.error("Invalid credentials")
+        toast.error("I do not recognize you.")
       }
     } catch {
-      toast.error("Login failed. Please try again.")
+      toast.error("Something went wrong. Try again.")
     } finally {
       setIsLoading(false)
     }
@@ -67,9 +67,9 @@ export default function LoginPage() {
           <div className="mx-auto mb-4 w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
             <Lock className="h-6 w-6 text-primary" />
           </div>
-          <CardTitle className="text-2xl">Admin Login</CardTitle>
+          <CardTitle className="text-2xl">It&apos;s me. Let me in.</CardTitle>
           <CardDescription>
-            Enter your credentials to access the admin panel
+            I need to know it&apos;s you.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -79,7 +79,7 @@ export default function LoginPage() {
               <Input
                 id="username"
                 type="text"
-                placeholder="Enter username"
+                placeholder="Who are you?"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 disabled={isLoading}
@@ -91,7 +91,7 @@ export default function LoginPage() {
               <Input
                 id="password"
                 type="password"
-                placeholder="Enter password"
+                placeholder="Prove it"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={isLoading}
@@ -102,10 +102,10 @@ export default function LoginPage() {
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Signing in...
+                  Checking...
                 </>
               ) : (
-                "Sign In"
+                "Let me in"
               )}
             </Button>
           </form>

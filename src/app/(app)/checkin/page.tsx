@@ -19,6 +19,9 @@ import {
 } from 'lucide-react'
 import QRCode from 'qrcode'
 import { resolveThemeColors, ThemeColors, getDefaultTheme } from '@/lib/theme-presets'
+import { DietaryBadges } from '@/components/dietary-badge'
+import type { DietaryInfo } from '@/lib/types'
+import { getTableLabel, getGuestLabel } from '@/lib/terminology'
 
 // Types for search results from Convex
 interface RoundAssignment {
@@ -39,6 +42,7 @@ interface Guest {
   tableNumber?: number
   qrCodeId?: string
   checkedIn: boolean
+  dietary?: DietaryInfo
 }
 
 interface Event {
@@ -61,6 +65,16 @@ interface Event {
     background: string
     foreground: string
     muted: string
+  }
+  eventType?: string
+  eventTypeSettings?: {
+    guestLabel: string
+    guestLabelPlural: string
+    tableLabel: string
+    tableLabelPlural: string
+    departmentLabel: string
+    departmentLabelPlural: string
+    showRoundTimer: boolean
   }
 }
 
@@ -145,7 +159,7 @@ export default function CheckinPage() {
     setCheckingInId(guestId)
     try {
       await checkInMutation({ id: guestId as Id<'guests'> })
-      toast.success('Successfully checked in!')
+      toast.success('You are in. Welcome.')
       // Brief delay to show toast, then return to search screen
       setTimeout(() => {
         setSelectedGuest(null)
@@ -153,7 +167,7 @@ export default function CheckinPage() {
         setSearchQuery('')
       }, 1500)
     } catch {
-      toast.error('Failed to check in')
+      toast.error('I could not check you in.')
     } finally {
       setCheckingInId(null)
     }
@@ -281,6 +295,11 @@ export default function CheckinPage() {
                   {guest.department}
                 </Badge>
               )}
+              {guest.dietary && (
+                <div className="flex justify-center">
+                  <DietaryBadges dietary={guest.dietary} compact={false} />
+                </div>
+              )}
             </CardHeader>
 
             <CardContent className="space-y-6">
@@ -339,7 +358,7 @@ export default function CheckinPage() {
                             className="text-2xl font-bold"
                             style={{ color: rowTextColor }}
                           >
-                            Table {assignment.tableNumber}
+                            {getTableLabel(event)} {assignment.tableNumber}
                           </span>
                         </div>
                       )
@@ -358,7 +377,7 @@ export default function CheckinPage() {
                     className="text-sm mb-2 uppercase tracking-wider font-medium"
                     style={themedStyles.cardTextMuted}
                   >
-                    Your Table
+                    Your {getTableLabel(event)}
                   </p>
                   <div
                     className="text-6xl font-bold"
@@ -381,7 +400,7 @@ export default function CheckinPage() {
                     className="text-sm mb-2"
                     style={{ color: getAccessibleMutedColor(themeColors.muted) }}
                   >
-                    Scan to find your table
+                    Scan this to find your seat
                   </p>
                   {/* eslint-disable-next-line @next/next/no-img-element -- QR codes are data URLs, not optimizable */}
                   <img
@@ -448,9 +467,9 @@ export default function CheckinPage() {
           </Link>
 
           <div className="text-center">
-            <h1 className="text-3xl font-bold mb-2">Find Your Table</h1>
+            <h1 className="text-3xl font-bold mb-2">Find Your Seat</h1>
             <p className="text-muted-foreground">
-              Search for your name to find your table assignment
+              Type your name. I will show you where to sit.
             </p>
           </div>
         </div>
@@ -460,7 +479,7 @@ export default function CheckinPage() {
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
           <Input
             type="text"
-            placeholder="Type your name..."
+            placeholder="What is your name?"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-12 py-6 text-lg"
@@ -472,18 +491,18 @@ export default function CheckinPage() {
         {searchQuery.trim().length < 2 ? (
           <div className="text-center py-12 text-muted-foreground">
             <Search className="h-12 w-12 mx-auto mb-4 opacity-20" />
-            <p>Enter at least 2 characters to search</p>
+            <p>Keep typing. I need at least 2 letters.</p>
           </div>
         ) : searchResults === undefined ? (
           <div className="text-center py-12">
             <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
-            <p className="mt-2 text-muted-foreground">Searching...</p>
+            <p className="mt-2 text-muted-foreground">Looking...</p>
           </div>
         ) : searchResults.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground">
             <Users className="h-12 w-12 mx-auto mb-4 opacity-20" />
-            <p className="text-lg font-medium mb-1">No results found</p>
-            <p className="text-sm">Try a different name or check with the event organizer</p>
+            <p className="text-lg font-medium mb-1">I cannot find you.</p>
+            <p className="text-sm">Try spelling it differently, or ask the event organizer.</p>
           </div>
         ) : (
           <div className="space-y-3">
@@ -519,6 +538,9 @@ export default function CheckinPage() {
                             </>
                           )}
                         </div>
+                        {result.guest.dietary && (
+                          <DietaryBadges dietary={result.guest.dietary} compact maxVisible={2} className="mt-1" />
+                        )}
                         {/* Show table assignments */}
                         <div className="mt-2">
                           {hasMultipleRounds ? (
@@ -536,7 +558,7 @@ export default function CheckinPage() {
                             </div>
                           ) : (
                             <Badge variant="outline" className="text-xs">
-                              Table {result.guest.tableNumber}
+                              {getTableLabel(result.event)} {result.guest.tableNumber}
                             </Badge>
                           )}
                         </div>

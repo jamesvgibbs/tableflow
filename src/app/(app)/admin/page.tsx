@@ -9,9 +9,12 @@ import { Id } from '@convex/_generated/dataModel'
 import { ProtectedRoute } from '@/components/protected-route'
 import { useAuth } from '@/components/auth-provider'
 import { generateEventName } from '@/lib/event-names'
+import { EVENT_TYPES, DEFAULT_EVENT_TYPE } from '@/lib/event-types'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import {
   Dialog,
   DialogContent,
@@ -20,6 +23,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { EventTypeSelector, EventTypeDisplay } from '@/components/event-type-selector'
 import { Plus, Trash2, Table as TableIcon, Calendar, LogOut, ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 
@@ -30,21 +34,47 @@ function AdminDashboard() {
   // Delete dialog state
   const [deleteDialogEvent, setDeleteDialogEvent] = useState<{ id: string; name: string } | null>(null)
 
+  // Create event dialog state
+  const [showCreateDialog, setShowCreateDialog] = useState(false)
+  const [newEventName, setNewEventName] = useState('')
+  const [newEventType, setNewEventType] = useState(DEFAULT_EVENT_TYPE)
+  const [isCreating, setIsCreating] = useState(false)
+
   // Convex queries and mutations
   const events = useQuery(api.events.list)
   const createEvent = useMutation(api.events.create)
   const deleteEventMutation = useMutation(api.events.remove)
 
+  const handleOpenCreateDialog = () => {
+    setNewEventName(generateEventName())
+    setNewEventType(DEFAULT_EVENT_TYPE)
+    setShowCreateDialog(true)
+  }
+
   const handleCreateNewEvent = async () => {
+    if (!newEventName.trim()) {
+      toast.error('I need a name for this event.')
+      return
+    }
+
+    setIsCreating(true)
     try {
+      const eventType = EVENT_TYPES[newEventType]
       const eventId = await createEvent({
-        name: generateEventName(),
-        tableSize: 8,
+        name: newEventName.trim(),
+        tableSize: eventType.defaults.tableSize,
+        numberOfRounds: eventType.defaults.numberOfRounds,
+        roundDuration: eventType.defaults.roundDuration,
+        eventType: newEventType,
+        eventTypeSettings: eventType.settings,
       })
-      toast.success('Event created successfully')
+      toast.success('Your event is ready. I am excited.')
+      setShowCreateDialog(false)
       router.push(`/event/${eventId}`)
     } catch {
-      toast.error('Failed to create event')
+      toast.error('Something went wrong. I could not create the event.')
+    } finally {
+      setIsCreating(false)
     }
   }
 
@@ -62,9 +92,9 @@ function AdminDashboard() {
     if (!deleteDialogEvent) return
     try {
       await deleteEventMutation({ id: deleteDialogEvent.id as Id<'events'> })
-      toast.success('Event deleted successfully')
+      toast.success('Event removed. I have forgotten it.')
     } catch {
-      toast.error('Failed to delete event')
+      toast.error('I could not remove the event. Something is wrong.')
     } finally {
       setDeleteDialogEvent(null)
     }
@@ -84,7 +114,7 @@ function AdminDashboard() {
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
         <div className="container mx-auto max-w-4xl px-4 py-12">
           <div className="flex items-center justify-center h-64">
-            <p className="text-muted-foreground">Loading...</p>
+            <p className="text-muted-foreground">Fetching your events...</p>
           </div>
         </div>
       </div>
@@ -114,7 +144,7 @@ function AdminDashboard() {
             Admin Dashboard
           </h1>
           <p className="text-lg text-muted-foreground">
-            Manage your events and table assignments
+            I keep track of your events. Pick one, or start something new.
           </p>
         </div>
 
@@ -122,11 +152,11 @@ function AdminDashboard() {
         <div className="flex justify-center mb-8 animate-slide-up">
           <Button
             size="lg"
-            onClick={handleCreateNewEvent}
+            onClick={handleOpenCreateDialog}
             className="gap-2 shadow-lg hover:shadow-xl transition-shadow"
           >
             <Plus className="h-5 w-5" />
-            Create New Event
+            Start a New Event
           </Button>
         </div>
 
@@ -138,9 +168,9 @@ function AdminDashboard() {
                 <div className="rounded-full bg-muted p-4 mb-4">
                   <TableIcon className="h-8 w-8 text-muted-foreground" />
                 </div>
-                <p className="text-lg font-medium mb-2">No events yet</p>
+                <p className="text-lg font-medium mb-2">No events yet. I am ready when you are.</p>
                 <p className="text-sm text-muted-foreground">
-                  Create your first event to get started.
+                  Tell me about your first event.
                 </p>
               </CardContent>
             </Card>
@@ -158,6 +188,7 @@ function AdminDashboard() {
                           <Calendar className="h-4 w-4" />
                           {formatDate(event.createdAt)}
                         </span>
+                        <EventTypeDisplay typeId={event.eventType} />
                       </CardDescription>
                     </div>
                     <div className="flex items-center gap-2">
@@ -195,10 +226,10 @@ function AdminDashboard() {
         <Dialog open={deleteDialogEvent !== null} onOpenChange={(open) => !open && setDeleteDialogEvent(null)}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Delete Event?</DialogTitle>
+              <DialogTitle>Remove this event?</DialogTitle>
               <DialogDescription>
-                Are you sure you want to delete &quot;{deleteDialogEvent?.name}&quot;? This action cannot be undone.
-                All guests, table assignments, and event data will be permanently removed.
+                Are you sure? I will forget everything about &quot;{deleteDialogEvent?.name}&quot;.
+                All the guests, all the seating. Gone.
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
@@ -206,7 +237,55 @@ function AdminDashboard() {
                 Cancel
               </Button>
               <Button variant="destructive" onClick={confirmDelete}>
-                Delete Event
+                Yes, remove it
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Create Event Dialog */}
+        <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Let me start a new event</DialogTitle>
+              <DialogDescription>
+                What kind of event is this? I will set things up for you.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-6 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="event-name">Event Name</Label>
+                <Input
+                  id="event-name"
+                  value={newEventName}
+                  onChange={(e) => setNewEventName(e.target.value)}
+                  placeholder="What should I call it?"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Event Type</Label>
+                <EventTypeSelector
+                  value={newEventType}
+                  onChange={setNewEventType}
+                />
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setShowCreateDialog(false)}
+                disabled={isCreating}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleCreateNewEvent}
+                disabled={isCreating || !newEventName.trim()}
+              >
+                {isCreating ? 'Setting things up...' : 'Let me start'}
               </Button>
             </DialogFooter>
           </DialogContent>
