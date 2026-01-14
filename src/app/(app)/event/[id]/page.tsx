@@ -18,11 +18,23 @@ import {
   ExternalLink,
   Plus,
   Palette,
+  Mail,
+  Sparkles,
+  LayoutGrid,
 } from "lucide-react"
 
-import { NewGuest } from "@/lib/types"
+import { NewGuest, type DietaryInfo } from "@/lib/types"
 import { cn, getDepartmentColors } from "@/lib/utils"
 import { ThemeColors, resolveThemeColors } from "@/lib/theme-presets"
+import {
+  getGuestLabel,
+  getGuestLabelPlural,
+  getTableLabel,
+  getTableLabelPlural,
+  getDepartmentLabel,
+  getDepartmentLabelPlural,
+  getCountLabel,
+} from "@/lib/terminology"
 
 // Calculate relative luminance for WCAG contrast
 function getLuminance(hex: string): number {
@@ -79,6 +91,9 @@ import { GuestForm } from "@/components/guest-form"
 import { BulkEntry } from "@/components/bulk-entry"
 import { CsvUpload } from "@/components/csv-upload"
 import { ThemeCustomizer } from "@/components/theme-customizer"
+import { TerminologyCustomizer } from "@/components/terminology-customizer"
+import { DietaryBadges } from "@/components/dietary-badge"
+import { type EventTypeSettings } from "@/lib/event-types"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -154,6 +169,8 @@ export default function EventPage({ params }: PageProps) {
   const updateNumberOfRoundsMutation = useMutation(api.events.updateNumberOfRounds)
   const updateThemePreset = useMutation(api.events.updateThemePreset)
   const updateCustomColors = useMutation(api.events.updateCustomColors)
+  const updateEventTypeSettings = useMutation(api.events.updateEventTypeSettings)
+  const clearEventTypeSettings = useMutation(api.events.clearEventTypeSettings)
   const addGuest = useMutation(api.guests.create)
   const addGuests = useMutation(api.guests.createMany)
   const removeGuest = useMutation(api.guests.remove)
@@ -173,7 +190,7 @@ export default function EventPage({ params }: PageProps) {
 
   // Add single guest
   const handleAddGuest = React.useCallback(
-    async (guestData: NewGuest) => {
+    async (guestData: NewGuest & { dietary?: DietaryInfo }) => {
       if (!eventId) return
 
       try {
@@ -183,10 +200,11 @@ export default function EventPage({ params }: PageProps) {
           department: guestData.department,
           email: guestData.email,
           phone: guestData.phone,
+          dietary: guestData.dietary,
         })
-        toast.success(`Added ${guestData.name}`)
+        toast.success(`I added ${guestData.name}.`)
       } catch {
-        toast.error("Failed to add guest")
+        toast.error("I could not add this guest.")
       }
     },
     [eventId, addGuest]
@@ -194,7 +212,7 @@ export default function EventPage({ params }: PageProps) {
 
   // Add multiple guests
   const handleAddGuests = React.useCallback(
-    async (guestsData: NewGuest[]) => {
+    async (guestsData: (NewGuest & { dietary?: DietaryInfo })[]) => {
       if (!eventId) return
 
       try {
@@ -205,12 +223,13 @@ export default function EventPage({ params }: PageProps) {
             department: g.department,
             email: g.email,
             phone: g.phone,
+            dietary: g.dietary,
           })),
         })
-        toast.success(`Added ${guestsData.length} guest${guestsData.length !== 1 ? "s" : ""}`)
+        toast.success(`I added ${guestsData.length} guest${guestsData.length !== 1 ? "s" : ""}.`)
         setShowAddGuestsDialog(false)
       } catch {
-        toast.error("Failed to add guests")
+        toast.error("I could not add those guests.")
       }
     },
     [eventId, addGuests]
@@ -221,9 +240,9 @@ export default function EventPage({ params }: PageProps) {
     async (guestId: string) => {
       try {
         await removeGuest({ id: guestId as Id<"guests"> })
-        toast.success("Guest removed")
+        toast.success("Removed.")
       } catch {
-        toast.error("Failed to remove guest")
+        toast.error("I could not remove that guest.")
       }
     },
     [removeGuest]
@@ -235,9 +254,9 @@ export default function EventPage({ params }: PageProps) {
 
     try {
       await removeAllGuests({ eventId })
-      toast.success("All guests cleared")
+      toast.success("All cleared. Starting fresh.")
     } catch {
-      toast.error("Failed to clear guests")
+      toast.error("I could not clear the guests.")
     }
   }, [eventId, removeAllGuests])
 
@@ -248,9 +267,9 @@ export default function EventPage({ params }: PageProps) {
     try {
       await updateEventName({ id: eventId, name: eventName.trim() })
       setIsEditingName(false)
-      toast.success("Event name updated")
+      toast.success("I will remember the new name.")
     } catch {
-      toast.error("Failed to update name")
+      toast.error("I could not change the name.")
     }
   }, [eventId, eventName, updateEventName])
 
@@ -265,7 +284,7 @@ export default function EventPage({ params }: PageProps) {
       try {
         await updateEventTableSize({ id: eventId, tableSize: validSize })
       } catch {
-        toast.error("Failed to update table size")
+        toast.error("I could not change the table size.")
       }
     },
     [eventId, updateEventTableSize]
@@ -286,13 +305,13 @@ export default function EventPage({ params }: PageProps) {
           // Use the special mutation that handles regenerating assignments
           const result = await updateNumberOfRoundsMutation({ id: eventId, numberOfRounds: validRounds })
           if (result.regenerated) {
-            toast.success(`Added ${result.newRoundsAdded} new round${result.newRoundsAdded !== 1 ? 's' : ''} with assignments`)
+            toast.success(`I added ${result.newRoundsAdded} new round${result.newRoundsAdded !== 1 ? 's' : ''} with seating.`)
           }
         } else {
           await updateRoundSettings({ id: eventId, numberOfRounds: validRounds })
         }
       } catch {
-        toast.error("Failed to update rounds")
+        toast.error("I could not update the rounds.")
       }
     },
     [eventId, isAssigned, updateRoundSettings, updateNumberOfRoundsMutation]
@@ -309,7 +328,7 @@ export default function EventPage({ params }: PageProps) {
       try {
         await updateRoundSettings({ id: eventId, roundDuration: validDuration })
       } catch {
-        toast.error("Failed to update duration")
+        toast.error("I could not update the duration.")
       }
     },
     [eventId, updateRoundSettings]
@@ -323,7 +342,7 @@ export default function EventPage({ params }: PageProps) {
       try {
         await updateThemePreset({ id: eventId, themePreset: preset })
       } catch {
-        toast.error("Failed to update theme")
+        toast.error("I could not update the theme.")
       }
     },
     [eventId, updateThemePreset]
@@ -336,10 +355,39 @@ export default function EventPage({ params }: PageProps) {
       try {
         await updateCustomColors({ id: eventId, customColors: colors })
       } catch {
-        toast.error("Failed to update colors")
+        toast.error("I could not update the colors.")
       }
     },
     [eventId, updateCustomColors]
+  )
+
+  // Terminology handlers
+  const handleTerminologyChange = React.useCallback(
+    async (settings: EventTypeSettings) => {
+      if (!eventId) return
+
+      try {
+        await updateEventTypeSettings({ id: eventId, eventTypeSettings: settings })
+        toast.success("I will use the new terminology.")
+      } catch {
+        toast.error("I could not update the terminology.")
+      }
+    },
+    [eventId, updateEventTypeSettings]
+  )
+
+  const handleClearTerminology = React.useCallback(
+    async () => {
+      if (!eventId) return
+
+      try {
+        await clearEventTypeSettings({ id: eventId })
+        toast.success("Reset to defaults.")
+      } catch {
+        toast.error("I could not reset the terminology.")
+      }
+    },
+    [eventId, clearEventTypeSettings]
   )
 
   // Assign tables
@@ -348,7 +396,7 @@ export default function EventPage({ params }: PageProps) {
 
     try {
       const result = await assignTablesMutation({ id: eventId })
-      toast.success(`Assigned ${result.numGuests} guests to ${result.numTables} tables`)
+      toast.success(`Done. ${result.numGuests} guests seated at ${result.numTables} tables.`)
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Failed to assign tables"
@@ -362,7 +410,7 @@ export default function EventPage({ params }: PageProps) {
 
     try {
       await assignTablesMutation({ id: eventId })
-      toast.success("Tables re-shuffled")
+      toast.success("Shuffled. New seating for everyone.")
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Failed to re-shuffle tables"
@@ -377,9 +425,9 @@ export default function EventPage({ params }: PageProps) {
     try {
       await resetAssignmentsMutation({ id: eventId })
       setShowResetDialog(false)
-      toast.success("Assignments reset")
+      toast.success("Reset. Let us start again.")
     } catch {
-      toast.error("Failed to reset assignments")
+      toast.error("I could not reset the assignments.")
     }
   }, [eventId, resetAssignmentsMutation])
 
@@ -496,7 +544,7 @@ export default function EventPage({ params }: PageProps) {
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center space-y-2">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-          <p className="text-sm text-muted-foreground">Loading event...</p>
+          <p className="text-sm text-muted-foreground">Fetching your event...</p>
         </div>
       </div>
     )
@@ -508,11 +556,11 @@ export default function EventPage({ params }: PageProps) {
       <div className="min-h-screen flex items-center justify-center p-4">
         <Card className="max-w-md w-full">
           <CardHeader>
-            <CardTitle>Event Not Found</CardTitle>
+            <CardTitle>I cannot find this event</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-muted-foreground">
-              The event you&apos;re looking for doesn&apos;t exist or has been deleted.
+              This event does not exist, or it wandered off. I am not sure which.
             </p>
             <Button onClick={() => router.push("/admin")} className="w-full">
               <ArrowLeft className="mr-2 size-4" />
@@ -554,6 +602,63 @@ export default function EventPage({ params }: PageProps) {
               </Button>
 
               <div className="flex items-center gap-2">
+                {/* Emails Page Link */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2 transition-colors"
+                  onClick={() => router.push(`/event/${eventId}/emails`)}
+                  style={themedStyles
+                    ? hoveredButton === 'emails'
+                      ? { ...themedStyles.pageInput, backgroundColor: `${themedStyles.pageText.color}20` }
+                      : themedStyles.pageInput
+                    : undefined
+                  }
+                  onMouseEnter={() => setHoveredButton('emails')}
+                  onMouseLeave={() => setHoveredButton(null)}
+                >
+                  <Mail className="size-4" />
+                  Emails
+                </Button>
+
+                {/* Seating Configuration Link */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2 transition-colors"
+                  onClick={() => router.push(`/event/${eventId}/seating`)}
+                  style={themedStyles
+                    ? hoveredButton === 'matching'
+                      ? { ...themedStyles.pageInput, backgroundColor: `${themedStyles.pageText.color}20` }
+                      : themedStyles.pageInput
+                    : undefined
+                  }
+                  onMouseEnter={() => setHoveredButton('matching')}
+                  onMouseLeave={() => setHoveredButton(null)}
+                >
+                  <Sparkles className="size-4" />
+                  How to Seat
+                </Button>
+
+                {/* Seating Editor Link */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2 transition-colors"
+                  onClick={() => router.push(`/event/${eventId}/seating-editor`)}
+                  style={themedStyles
+                    ? hoveredButton === 'seating'
+                      ? { ...themedStyles.pageInput, backgroundColor: `${themedStyles.pageText.color}20` }
+                      : themedStyles.pageInput
+                    : undefined
+                  }
+                  onMouseEnter={() => setHoveredButton('seating')}
+                  onMouseLeave={() => setHoveredButton(null)}
+                >
+                  <LayoutGrid className="size-4" />
+                  Seating
+                </Button>
+
                 {/* Settings Sheet Trigger */}
                 <Sheet open={showSettingsSheet} onOpenChange={setShowSettingsSheet}>
                   <SheetTrigger asChild>
@@ -578,15 +683,22 @@ export default function EventPage({ params }: PageProps) {
                     <SheetHeader>
                       <SheetTitle>Look & Feel</SheetTitle>
                       <SheetDescription>
-                        Customize the theme and colors for your event
+                        I can wear different colors and speak your language.
                       </SheetDescription>
                     </SheetHeader>
-                    <div className="mt-6">
+                    <div className="mt-6 space-y-8">
                       <ThemeCustomizer
                         themePreset={event.themePreset}
                         customColors={event.customColors}
                         onThemePresetChange={handleThemePresetChange}
                         onCustomColorsChange={handleCustomColorsChange}
+                      />
+                      <Separator />
+                      <TerminologyCustomizer
+                        eventType={event.eventType}
+                        eventTypeSettings={event.eventTypeSettings}
+                        onSettingsChange={handleTerminologyChange}
+                        onClearSettings={handleClearTerminology}
                       />
                     </div>
                   </SheetContent>
@@ -733,7 +845,7 @@ export default function EventPage({ params }: PageProps) {
                     <div className="flex items-center justify-between">
                       <CardTitle className="flex items-center gap-2" style={themedStyles?.cardText}>
                         <Users className="size-5" />
-                        Guest List
+                        {getGuestLabel(event)} List
                         {guests && guests.length > 0 && (
                           <Badge
                             variant="secondary"
@@ -769,7 +881,7 @@ export default function EventPage({ params }: PageProps) {
                           onMouseLeave={() => setHoveredButton(null)}
                         >
                           <Plus className="size-4" />
-                          Add Guests
+                          Add {getGuestLabelPlural(event)}
                         </Button>
                       </div>
                     </div>
@@ -778,8 +890,8 @@ export default function EventPage({ params }: PageProps) {
                     {!guests || guests.length === 0 ? (
                       <div className="text-center py-12" style={themedStyles?.cardTextMuted}>
                         <Users className="size-12 mx-auto mb-3 opacity-20" />
-                        <p className="font-medium mb-1" style={themedStyles?.cardText}>No guests added yet</p>
-                        <p className="text-sm mb-4">Add guests to get started</p>
+                        <p className="font-medium mb-1" style={themedStyles?.cardText}>No {getGuestLabelPlural(event).toLowerCase()} yet. I am waiting.</p>
+                        <p className="text-sm mb-4">Give me names.</p>
                         <Button
                           onClick={() => setShowAddGuestsDialog(true)}
                           className="gap-2 transition-colors"
@@ -793,7 +905,7 @@ export default function EventPage({ params }: PageProps) {
                           onMouseLeave={() => setHoveredButton(null)}
                         >
                           <Plus className="size-4" />
-                          Add Guests
+                          Add {getGuestLabelPlural(event)}
                         </Button>
                       </div>
                     ) : (
@@ -861,13 +973,23 @@ export default function EventPage({ params }: PageProps) {
                                       style={themedStyles ? { backgroundColor: themeColors?.accent } : undefined}
                                     />
                                   )}
-                                  <div className="min-w-0">
-                                    <p
-                                      className={cn("font-medium truncate text-sm", !themedStyles && "text-foreground")}
-                                      style={themedStyles?.cardText}
-                                    >
-                                      {guest.name}
-                                    </p>
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-2">
+                                      <p
+                                        className={cn("font-medium truncate text-sm", !themedStyles && "text-foreground")}
+                                        style={themedStyles?.cardText}
+                                      >
+                                        {guest.name}
+                                      </p>
+                                      {guest.dietary && (
+                                        <DietaryBadges
+                                          dietary={guest.dietary}
+                                          compact
+                                          maxVisible={2}
+                                          className="shrink-0"
+                                        />
+                                      )}
+                                    </div>
                                     {guest.department && (
                                       <p
                                         className={cn("text-xs truncate", !themedStyles && "text-muted-foreground")}
@@ -913,7 +1035,7 @@ export default function EventPage({ params }: PageProps) {
                     onMouseLeave={() => setHoveredButton(null)}
                   >
                     <Shuffle className="mr-2 size-5" />
-                    Randomize Tables
+                    Randomize {getTableLabelPlural(event)}
                   </Button>
                 )}
               </>
@@ -931,10 +1053,10 @@ export default function EventPage({ params }: PageProps) {
                 <CardContent className="space-y-4">
                   <div className="flex flex-wrap gap-3">
                     <Badge variant="secondary" className="text-base" style={themedStyles?.primary}>
-                      {guests?.length || 0} guests
+                      {getCountLabel(event, guests?.length || 0, "guest")}
                     </Badge>
                     <Badge variant="secondary" className="text-base" style={themedStyles?.primary}>
-                      {Math.ceil((guests?.length || 0) / tableSize)} tables
+                      {getCountLabel(event, Math.ceil((guests?.length || 0) / tableSize), "table")}
                     </Badge>
                     <Badge variant="secondary" className="text-base" style={themedStyles?.primary}>
                       {numberOfRounds} round{numberOfRounds !== 1 ? "s" : ""}
@@ -983,9 +1105,9 @@ export default function EventPage({ params }: PageProps) {
         <Dialog open={showAddGuestsDialog} onOpenChange={setShowAddGuestsDialog}>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Add Guests</DialogTitle>
+              <DialogTitle>Add {getGuestLabelPlural(event)}</DialogTitle>
               <DialogDescription>
-                Add guests individually, in bulk, or import from a CSV file.
+                One at a time, many at once, or from a file. Your choice.
               </DialogDescription>
             </DialogHeader>
             <Tabs defaultValue="single" className="w-full">
@@ -995,13 +1117,22 @@ export default function EventPage({ params }: PageProps) {
                 <TabsTrigger value="import">Import CSV</TabsTrigger>
               </TabsList>
               <TabsContent value="single" className="mt-4">
-                <GuestForm onAddGuest={handleAddGuest} />
+                <GuestForm
+                  onAddGuest={handleAddGuest}
+                  departmentLabel={getDepartmentLabel(event)}
+                  guestLabel={getGuestLabel(event)}
+                />
               </TabsContent>
               <TabsContent value="bulk" className="mt-4">
                 <BulkEntry onAddGuests={handleAddGuests} />
               </TabsContent>
               <TabsContent value="import" className="mt-4">
-                <CsvUpload onImportGuests={handleAddGuests} />
+                <CsvUpload
+                  onImportGuests={handleAddGuests}
+                  departmentLabel={getDepartmentLabel(event)}
+                  guestLabel={getGuestLabel(event).toLowerCase()}
+                  guestLabelPlural={getGuestLabelPlural(event).toLowerCase()}
+                />
               </TabsContent>
             </Tabs>
           </DialogContent>
@@ -1011,10 +1142,9 @@ export default function EventPage({ params }: PageProps) {
         <Dialog open={showResetDialog} onOpenChange={setShowResetDialog}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Reset Assignments?</DialogTitle>
+              <DialogTitle>Start over?</DialogTitle>
               <DialogDescription>
-                This will clear all table assignments and return to the guest input mode.
-                You can randomize tables again after resetting.
+                I will clear all seating. You can shuffle again after.
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
