@@ -8,6 +8,7 @@ import { Id } from "@convex/_generated/dataModel"
 import { ArrowLeft } from "lucide-react"
 
 import { MatchingConfig } from "@/components/matching-config"
+import { SeatherderLoading } from "@/components/seatherder-loading"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
@@ -36,14 +37,7 @@ export default function MatchingSettingsPage({ params }: PageProps) {
 
   // Loading state
   if (!eventId || event === undefined) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center space-y-2">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-          <p className="text-sm text-muted-foreground">Loading...</p>
-        </div>
-      </div>
-    )
+    return <SeatherderLoading message="I am loading the matching settings..." />
   }
 
   // Not found state
@@ -84,9 +78,9 @@ export default function MatchingSettingsPage({ params }: PageProps) {
           </Button>
 
           <div className="space-y-1">
-            <h1 className="text-2xl md:text-3xl font-bold">Matching Settings</h1>
+            <h1 className="text-2xl md:text-3xl font-bold">Tell me how to seat your guests</h1>
             <p className="text-muted-foreground">
-              Configure how guests are matched and seated together
+              I will use your preferences when I assign tables.
             </p>
           </div>
         </div>

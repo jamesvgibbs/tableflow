@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SeatingTypeSelector } from "@/components/seating-type-selector";
 import { SeatingQuestionFlow } from "@/components/seating-question-flow";
 import { SeatingConfirmation } from "@/components/seating-confirmation";
+import { SeatherderLoading } from "@/components/seatherder-loading";
 import {
   SEATING_EVENT_TYPES,
   QUESTIONS_BY_TYPE,
@@ -114,14 +115,7 @@ export default function SeatingWizardPage({ params }: PageProps) {
 
   // Loading state
   if (!eventId || event === undefined) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center space-y-2">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto" />
-          <p className="text-sm text-muted-foreground">Loading...</p>
-        </div>
-      </div>
-    );
+    return <SeatherderLoading message="I am loading the seating options..." />;
   }
 
   // Not found state
@@ -130,12 +124,11 @@ export default function SeatingWizardPage({ params }: PageProps) {
       <div className="min-h-screen flex items-center justify-center p-4">
         <Card className="max-w-md w-full">
           <CardHeader>
-            <CardTitle>Event Not Found</CardTitle>
+            <CardTitle>I cannot find this event</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-muted-foreground">
-              The event you&apos;re looking for doesn&apos;t exist or has been
-              deleted.
+              This event does not exist, or it wandered off. I am not sure which.
             </p>
             <Button onClick={() => router.push("/admin")} className="w-full">
               <ArrowLeft className="mr-2 size-4" />

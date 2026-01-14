@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { SeatherderLoading } from "@/components/seatherder-loading"
 import { Loader2, Lock, ArrowLeft } from "lucide-react"
 import Link from "next/link"
 
@@ -53,11 +54,7 @@ export default function LoginPage() {
 
   // Show loading while checking auth
   if (authLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    )
+    return <SeatherderLoading message="I am checking who you are..." />
   }
 
   return (

@@ -6,6 +6,7 @@ import { api } from '@convex/_generated/api'
 import { Id } from '@convex/_generated/dataModel'
 import { Maximize, Minimize, Volume2, VolumeX } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { SeatherderLoading } from '@/components/seatherder-loading'
 import { cn } from '@/lib/utils'
 import { resolveThemeColors } from '@/lib/theme-presets'
 
@@ -246,18 +247,14 @@ export default function TimerPage({ params }: TimerPageProps) {
 
   // Loading state
   if (!eventId || event === undefined) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="text-white text-2xl">Loading...</div>
-      </div>
-    )
+    return <SeatherderLoading message="I am loading the timer..." />
   }
 
   // Event not found
   if (event === null) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="text-white text-2xl">Event not found</div>
+        <div className="text-white text-2xl">I cannot find this event</div>
       </div>
     )
   }

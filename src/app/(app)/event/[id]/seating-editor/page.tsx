@@ -56,6 +56,7 @@ import {
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { SeatherderLoading } from "@/components/seatherder-loading"
 import {
   Tooltip,
   TooltipContent,
@@ -586,16 +587,7 @@ export default function SeatingEditorPage({ params }: PageProps) {
 
   // Loading state
   if (!eventId || event === undefined) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center space-y-4">
-          <div className="animate-bounce">
-            <Dog className="w-12 h-12 text-amber-600 mx-auto" />
-          </div>
-          <p className="text-muted-foreground">I am fetching the seating chart...</p>
-        </div>
-      </div>
-    )
+    return <SeatherderLoading message="I am fetching the seating chart..." />
   }
 
   // Not found

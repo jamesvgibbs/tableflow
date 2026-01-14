@@ -42,6 +42,7 @@ import { TableCard } from '@/components/table-card'
 import { GuestCard } from '@/components/guest-card'
 import { GuestForm } from '@/components/guest-form'
 import { EventThemeProvider } from '@/components/event-theme-provider'
+import { SeatherderLoading } from '@/components/seatherder-loading'
 import { ThemeColors } from '@/lib/theme-presets'
 
 import { Button } from '@/components/ui/button'
@@ -618,14 +619,7 @@ export default function LiveEventPage({ params }: PageProps) {
 
   // Loading state
   if (!eventId || event === undefined) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center space-y-2">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-          <p className="text-sm text-muted-foreground">Fetching your event...</p>
-        </div>
-      </div>
-    )
+    return <SeatherderLoading message="I am fetching the live event..." />
   }
 
   // Not found state

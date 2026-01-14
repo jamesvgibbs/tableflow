@@ -52,6 +52,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { SeatherderLoading } from "@/components/seatherder-loading"
 
 interface PageProps {
   params: Promise<{ id: string }>
@@ -300,14 +301,7 @@ export default function EmailsPage({ params }: PageProps) {
 
   // Loading state
   if (!eventId || event === undefined) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center space-y-2">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-          <p className="text-sm text-muted-foreground">Loading...</p>
-        </div>
-      </div>
-    )
+    return <SeatherderLoading message="I am loading the email settings..." />
   }
 
   // Not found state
@@ -351,7 +345,7 @@ export default function EmailsPage({ params }: PageProps) {
             </div>
 
             <div>
-              <h1 className="text-2xl md:text-3xl font-bold">Email Management</h1>
+              <h1 className="text-2xl md:text-3xl font-bold">I can send your invitations</h1>
               <p className="text-muted-foreground">{event.name}</p>
             </div>
 
@@ -410,7 +404,7 @@ export default function EmailsPage({ params }: PageProps) {
                     Event Attachments
                   </CardTitle>
                   <CardDescription>
-                    Upload files to include with invitation emails (PDFs, images, etc.)
+                    I can attach files to your invitations.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -477,7 +471,7 @@ export default function EmailsPage({ params }: PageProps) {
                     </div>
                   ) : (
                     <p className="text-sm text-muted-foreground py-4 text-center">
-                      No attachments uploaded
+                      No attachments yet. Your invitations will be text-only.
                     </p>
                   )}
                 </CardContent>
@@ -491,7 +485,7 @@ export default function EmailsPage({ params }: PageProps) {
                     Send Invitations
                   </CardTitle>
                   <CardDescription>
-                    Send invitation emails to all guests who haven&apos;t received one yet
+                    I will send invitations to guests who have not gotten one yet.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -549,7 +543,7 @@ export default function EmailsPage({ params }: PageProps) {
                     Email Settings
                   </CardTitle>
                   <CardDescription>
-                    Configure how your event emails appear to recipients
+                    Tell me how to sign your emails.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">

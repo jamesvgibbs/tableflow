@@ -93,6 +93,7 @@ import { CsvUpload } from "@/components/csv-upload"
 import { ThemeCustomizer } from "@/components/theme-customizer"
 import { TerminologyCustomizer } from "@/components/terminology-customizer"
 import { DietaryBadges } from "@/components/dietary-badge"
+import { SeatherderLoading } from "@/components/seatherder-loading"
 import { type EventTypeSettings } from "@/lib/event-types"
 
 import { Button } from "@/components/ui/button"
@@ -594,14 +595,7 @@ export default function EventPage({ params }: PageProps) {
 
   // Loading state
   if (!eventId || event === undefined) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center space-y-2">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-          <p className="text-sm text-muted-foreground">Fetching your event...</p>
-        </div>
-      </div>
-    )
+    return <SeatherderLoading message="I am fetching your event..." />
   }
 
   // Not found state

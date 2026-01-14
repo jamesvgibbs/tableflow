@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Loader2, UserCircle, Users, CheckCircle2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { DietaryBadges } from '@/components/dietary-badge'
+import { SeatherderLoading } from '@/components/seatherder-loading'
 import { getTableLabel, getGuestLabelPlural } from '@/lib/terminology'
 
 interface ScanPageProps {
@@ -54,16 +55,7 @@ export default function ScanPage({ params }: ScanPageProps) {
 
   // Loading state
   if (!qrCodeId || (guestResult === undefined && tableResult === undefined)) {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-background to-muted/20">
-        <Card className="w-full max-w-lg">
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
-            <p className="text-lg text-muted-foreground">Let me find your seat...</p>
-          </CardContent>
-        </Card>
-      </div>
-    )
+    return <SeatherderLoading message="I am finding your seat..." />
   }
 
   // Not found state
