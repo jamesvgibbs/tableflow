@@ -391,7 +391,7 @@ export default function LiveEventPage({ params }: PageProps) {
 
     try {
       await pauseRound({ id: eventId })
-      toast.success('Paused.')
+      toast.success('Pawsed! 🐾')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to pause round')
     }
@@ -737,7 +737,7 @@ export default function LiveEventPage({ params }: PageProps) {
 
             {isTimerPaused && (
               <div className="mt-8 text-2xl sm:text-4xl font-bold uppercase tracking-widest text-white animate-pulse">
-                PAUSED
+                PAWSED
               </div>
             )}
 
@@ -879,7 +879,7 @@ export default function LiveEventPage({ params }: PageProps) {
                         Round {event.currentRound || 0} of {event.numberOfRounds || 1}
                       </span>
                       {event.currentRound && event.currentRound > 0 && event.isPaused && (
-                        <Badge className="bg-blue-600 text-white">Paused</Badge>
+                        <Badge className="bg-blue-600 text-white">Pawsed 🐾</Badge>
                       )}
                       {event.currentRound && event.currentRound > 0 && event.roundStartedAt && !event.isPaused && (
                         <Badge
@@ -922,7 +922,7 @@ export default function LiveEventPage({ params }: PageProps) {
                           </div>
                           {isTimerPaused && (
                             <div className="text-lg font-bold text-blue-600 uppercase tracking-widest animate-pulse">
-                              PAUSED
+                              PAWSED
                             </div>
                           )}
                         </div>
@@ -1043,7 +1043,7 @@ export default function LiveEventPage({ params }: PageProps) {
                           onMouseLeave={() => setHoveredButton(null)}
                         >
                           <Pause className="size-5" />
-                          Pause
+                          Paws
                         </Button>
                       )
                     )}

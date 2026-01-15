@@ -403,7 +403,7 @@ export default function TimerPage({ params }: TimerPageProps) {
               className="mt-8 text-2xl sm:text-4xl font-bold uppercase tracking-widest animate-pulse"
               style={{ color: textColor }}
             >
-              PAUSED
+              PAWSED
             </div>
             {/* Progress bar */}
             {event.roundDuration && (
