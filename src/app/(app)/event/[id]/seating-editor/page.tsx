@@ -32,7 +32,14 @@ import {
   Utensils,
   Sparkles,
   Dog,
+  ZoomIn,
+  ZoomOut,
+  Maximize,
+  RotateCcw,
+  Move,
+  GripVertical,
 } from "lucide-react"
+import { useGesture } from "@use-gesture/react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -56,7 +63,9 @@ import {
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Slider } from "@/components/ui/slider"
 import { SeatherderLoading } from "@/components/seatherder-loading"
+import { cn, getDepartmentColors } from "@/lib/utils"
 import {
   Tooltip,
   TooltipContent,
@@ -77,6 +86,39 @@ type TableAssignment = {
   tableNumber: number
   roundNumber: number
 }
+
+type CanvasTransform = {
+  x: number
+  y: number
+  scale: number
+}
+
+type TablePosition = {
+  x: number
+  y: number
+}
+
+// Generate initial grid positions for tables
+function generateGridPositions(numTables: number): Map<number, TablePosition> {
+  const positions = new Map<number, TablePosition>()
+  const cols = Math.max(3, Math.ceil(Math.sqrt(numTables)))
+  const spacing = 220 // pixels between table centers
+
+  for (let i = 0; i < numTables; i++) {
+    const row = Math.floor(i / cols)
+    const col = i % cols
+    positions.set(i + 1, {
+      x: col * spacing + 120,
+      y: row * spacing + 120,
+    })
+  }
+  return positions
+}
+
+// Canvas zoom constraints
+const MIN_ZOOM = 0.3
+const MAX_ZOOM = 2
+const ZOOM_STEP = 0.1
 
 // Generate a consistent color from a string (department name)
 function stringToColor(str: string): string {
@@ -166,9 +208,21 @@ function GuestAvatar({
       <TooltipContent side="top" className="max-w-xs">
         <div className="space-y-1">
           <p className="font-semibold">{guest.guestName}</p>
-          {guest.guestDepartment && (
-            <p className="text-xs text-muted-foreground">{guest.guestDepartment}</p>
-          )}
+          {guest.guestDepartment && (() => {
+            const colors = getDepartmentColors(guest.guestDepartment)
+            return (
+              <span
+                className={cn(
+                  "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border",
+                  colors.bg,
+                  colors.text,
+                  colors.border
+                )}
+              >
+                {guest.guestDepartment}
+              </span>
+            )
+          })()}
           {(isPinned || hasRepel || hasAttract) && (
             <div className="flex gap-1 pt-1 flex-wrap">
               {isPinned && <Badge variant="secondary" className="text-[10px] bg-blue-100 text-blue-700">Pinned</Badge>}
@@ -296,10 +350,10 @@ function CircularTable({
       className={`relative transition-all duration-200 ${isOver ? "scale-105" : ""}`}
       style={{ width: containerSize, height: containerSize }}
     >
-      {/* Table surface - the brown circle */}
+      {/* Table surface - the brown circle (drag handle for table positioning) */}
       <div
         className={`
-          absolute rounded-full
+          table-surface absolute rounded-full cursor-grab
           bg-gradient-to-br from-amber-700 to-amber-900
           shadow-lg border-4 border-amber-600
           transition-all duration-200
@@ -314,10 +368,10 @@ function CircularTable({
         }}
       >
         {/* Table shine */}
-        <div className="absolute inset-1 rounded-full bg-gradient-to-br from-white/20 to-transparent" />
+        <div className="table-surface absolute inset-1 rounded-full bg-gradient-to-br from-white/20 to-transparent pointer-events-none" />
 
         {/* Table number */}
-        <div className="absolute inset-0 flex items-center justify-center">
+        <div className="table-surface absolute inset-0 flex items-center justify-center pointer-events-none">
           <span className="text-lg font-bold text-amber-100">{tableNumber}</span>
         </div>
       </div>
@@ -375,6 +429,178 @@ function CircularTable({
   )
 }
 
+// Draggable Table Wrapper for canvas positioning
+interface DraggableTableWrapperProps {
+  tableNumber: number
+  position: TablePosition
+  onPositionChange: (tableNum: number, pos: TablePosition) => void
+  isDraggingTable: boolean
+  onDragStart: () => void
+  onDragEnd: () => void
+  children: React.ReactNode
+  canDragTable: boolean
+}
+
+function DraggableTableWrapper({
+  tableNumber,
+  position,
+  onPositionChange,
+  isDraggingTable,
+  onDragStart,
+  onDragEnd,
+  children,
+  canDragTable,
+}: DraggableTableWrapperProps) {
+  const [localOffset, setLocalOffset] = React.useState({ x: 0, y: 0 })
+  const [isDragging, setIsDragging] = React.useState(false)
+
+  const bind = useGesture(
+    {
+      onDrag: ({ movement: [mx, my], first, last, event, memo }) => {
+        if (!canDragTable) return memo
+
+        // On first event, check if we started on the table surface (not a guest)
+        if (first) {
+          const target = event?.target as HTMLElement
+          // Only drag table if started on table-surface class (the brown circle)
+          const isTableSurface = target?.closest('.table-surface') !== null
+          if (!isTableSurface) return { dragging: false }
+
+          setIsDragging(true)
+          onDragStart()
+          return { dragging: true }
+        }
+
+        // Skip if we determined this isn't a table drag
+        if (!memo?.dragging) return memo
+
+        setLocalOffset({ x: mx, y: my })
+
+        if (last) {
+          setIsDragging(false)
+          onDragEnd()
+          onPositionChange(tableNumber, {
+            x: position.x + mx,
+            y: position.y + my,
+          })
+          setLocalOffset({ x: 0, y: 0 })
+        }
+
+        return memo
+      },
+    },
+    {
+      drag: {
+        filterTaps: true,
+        pointer: { buttons: [1] }, // Only left mouse button
+      },
+    }
+  )
+
+  return (
+    <div
+      {...bind()}
+      className={cn(
+        "absolute transition-shadow duration-200",
+        canDragTable && "cursor-grab",
+        isDragging && "cursor-grabbing z-50",
+        isDraggingTable && isDragging && "shadow-2xl"
+      )}
+      style={{
+        left: position.x + localOffset.x,
+        top: position.y + localOffset.y,
+        transform: "translate(-50%, -50%)",
+      }}
+    >
+      {/* Drag handle indicator */}
+      {canDragTable && (
+        <div className="absolute -top-6 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="flex items-center gap-0.5 px-1.5 py-0.5 bg-muted rounded text-[10px] text-muted-foreground">
+            <Move className="w-3 h-3" />
+          </div>
+        </div>
+      )}
+      <div className="group">
+        {children}
+      </div>
+    </div>
+  )
+}
+
+// Canvas Controls Component
+interface CanvasControlsProps {
+  transform: CanvasTransform
+  onZoomChange: (scale: number) => void
+  onFitToView: () => void
+  onResetLayout: () => void
+}
+
+function CanvasControls({
+  transform,
+  onZoomChange,
+  onFitToView,
+  onResetLayout,
+}: CanvasControlsProps) {
+  const zoomPercent = Math.round(transform.scale * 100)
+
+  return (
+    <div className="absolute bottom-4 left-4 flex items-center gap-2 bg-background/95 backdrop-blur-sm border rounded-lg p-2 shadow-lg z-20">
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8"
+        onClick={() => onZoomChange(Math.max(MIN_ZOOM, transform.scale - ZOOM_STEP))}
+        disabled={transform.scale <= MIN_ZOOM}
+      >
+        <ZoomOut className="h-4 w-4" />
+      </Button>
+
+      <div className="flex items-center gap-2 w-28">
+        <Slider
+          value={[transform.scale]}
+          min={MIN_ZOOM}
+          max={MAX_ZOOM}
+          step={ZOOM_STEP}
+          onValueChange={([value]) => onZoomChange(value)}
+          className="w-full"
+        />
+      </div>
+
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8"
+        onClick={() => onZoomChange(Math.min(MAX_ZOOM, transform.scale + ZOOM_STEP))}
+        disabled={transform.scale >= MAX_ZOOM}
+      >
+        <ZoomIn className="h-4 w-4" />
+      </Button>
+
+      <span className="text-xs text-muted-foreground w-10 text-center">{zoomPercent}%</span>
+
+      <div className="h-4 w-px bg-border mx-1" />
+
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onFitToView}>
+            <Maximize className="h-4 w-4" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>Fit to view</TooltipContent>
+      </Tooltip>
+
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onResetLayout}>
+            <RotateCcw className="h-4 w-4" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>Reset layout</TooltipContent>
+      </Tooltip>
+    </div>
+  )
+}
+
 // Seatherder Messages
 const seatherderMessages = {
   empty: "I do not see any guests here yet. The tables are lonely.",
@@ -400,6 +626,13 @@ export default function SeatingEditorPage({ params }: PageProps) {
   const [savingConstraint, setSavingConstraint] = React.useState(false)
   const [activeDragGuest, setActiveDragGuest] = React.useState<TableAssignment | null>(null)
   const [overTableId, setOverTableId] = React.useState<string | null>(null)
+
+  // Canvas state
+  const [canvasTransform, setCanvasTransform] = React.useState<CanvasTransform>({ x: 0, y: 0, scale: 1 })
+  const [tablePositions, setTablePositions] = React.useState<Map<number, TablePosition>>(new Map())
+  const [isDraggingTable, setIsDraggingTable] = React.useState(false)
+  const [isPanning, setIsPanning] = React.useState(false)
+  const canvasRef = React.useRef<HTMLDivElement>(null)
 
   // DnD sensors
   const sensors = useSensors(
@@ -474,6 +707,78 @@ export default function SeatingEditorPage({ params }: PageProps) {
     return byTable
   }, [getAssignmentsByRound, selectedRound, numTables])
 
+  // Initialize table positions when numTables changes
+  React.useEffect(() => {
+    if (numTables > 0 && tablePositions.size !== numTables) {
+      setTablePositions(generateGridPositions(numTables))
+    }
+  }, [numTables, tablePositions.size])
+
+  // Canvas gestures - map-like controls
+  const canvasBind = useGesture(
+    {
+      onDrag: ({ movement: [mx, my], first, last, event, memo }) => {
+        // Skip if dragging a table or guest (those have their own handlers)
+        if (isDraggingTable || activeDragGuest) return memo
+
+        // Check if drag started on the canvas background (not on a table/guest)
+        if (first) {
+          const target = event?.target as HTMLElement
+          // Only pan if we started on the canvas background itself
+          const isBackground = target?.classList?.contains('canvas-background')
+          if (!isBackground) return { panning: false }
+
+          setIsPanning(true)
+          return { panning: true, startX: canvasTransform.x, startY: canvasTransform.y }
+        }
+
+        // If not panning, skip
+        if (!memo?.panning) return memo
+
+        // Apply pan movement
+        setCanvasTransform((prev) => ({
+          ...prev,
+          x: memo.startX + mx / prev.scale,
+          y: memo.startY + my / prev.scale,
+        }))
+
+        if (last) {
+          setIsPanning(false)
+        }
+
+        return memo
+      },
+      onWheel: ({ delta: [, dy], event }) => {
+        // Zoom with scroll wheel (no modifier needed - like Google Maps)
+        event?.preventDefault()
+        const zoomDelta = -dy * 0.002
+        setCanvasTransform((prev) => ({
+          ...prev,
+          scale: Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, prev.scale + zoomDelta)),
+        }))
+      },
+      onPinch: ({ offset: [scale], event }) => {
+        // Pinch to zoom on touch devices
+        event?.preventDefault()
+        setCanvasTransform((prev) => ({
+          ...prev,
+          scale: Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, scale)),
+        }))
+      },
+    },
+    {
+      drag: {
+        filterTaps: true,
+        pointer: { touch: true }, // Enable touch support
+      },
+      wheel: { eventOptions: { passive: false } },
+      pinch: {
+        scaleBounds: { min: MIN_ZOOM, max: MAX_ZOOM },
+        eventOptions: { passive: false },
+      },
+    }
+  )
+
   // Handlers
   const handleGeneratePreview = async () => {
     if (!eventId) return
@@ -543,6 +848,51 @@ export default function SeatingEditorPage({ params }: PageProps) {
     }
   }
 
+  // Canvas control handlers
+  const handleZoomChange = (scale: number) => {
+    setCanvasTransform((prev) => ({ ...prev, scale }))
+  }
+
+  const handleFitToView = () => {
+    if (!canvasRef.current || tablePositions.size === 0) return
+
+    const positions = Array.from(tablePositions.values())
+    const minX = Math.min(...positions.map((p) => p.x))
+    const maxX = Math.max(...positions.map((p) => p.x))
+    const minY = Math.min(...positions.map((p) => p.y))
+    const maxY = Math.max(...positions.map((p) => p.y))
+
+    const contentWidth = maxX - minX + 200 // Add padding
+    const contentHeight = maxY - minY + 200
+
+    const containerRect = canvasRef.current.getBoundingClientRect()
+    const scaleX = containerRect.width / contentWidth
+    const scaleY = containerRect.height / contentHeight
+    const scale = Math.min(Math.max(MIN_ZOOM, Math.min(scaleX, scaleY) * 0.9), MAX_ZOOM)
+
+    const centerX = (minX + maxX) / 2
+    const centerY = (minY + maxY) / 2
+
+    setCanvasTransform({
+      x: containerRect.width / 2 - centerX,
+      y: containerRect.height / 2 - centerY,
+      scale,
+    })
+  }
+
+  const handleResetLayout = () => {
+    setTablePositions(generateGridPositions(numTables))
+    setCanvasTransform({ x: 0, y: 0, scale: 1 })
+  }
+
+  const handleTablePositionChange = (tableNum: number, pos: TablePosition) => {
+    setTablePositions((prev) => {
+      const next = new Map(prev)
+      next.set(tableNum, pos)
+      return next
+    })
+  }
+
   // Drag handlers
   const handleDragStart = (event: DragStartEvent) => {
     const allAssignments = getAssignmentsByRound(selectedRound)
@@ -562,10 +912,30 @@ export default function SeatingEditorPage({ params }: PageProps) {
     if (!over || !eventId || !preview) return
 
     const overId = over.id as string
+    const guestId = active.id as Id<"guests">
+
+    // Handle drop to unassigned zone
+    if (overId === "unassigned-zone") {
+      const currentAssignment = getAssignmentsByRound(selectedRound).find((a) => a.guestId === guestId)
+      if (!currentAssignment || currentAssignment.tableNumber === 0) return
+
+      try {
+        await updatePreviewAssignment({
+          eventId,
+          guestId,
+          roundNumber: selectedRound,
+          newTableNumber: 0, // 0 = unassigned
+        })
+      } catch (error) {
+        console.error("Failed to unassign guest:", error)
+      }
+      return
+    }
+
+    // Handle drop to table
     if (!overId.startsWith("table-")) return
 
     const newTableNumber = parseInt(overId.replace("table-", ""))
-    const guestId = active.id as Id<"guests">
 
     const currentAssignment = getAssignmentsByRound(selectedRound).find((a) => a.guestId === guestId)
     if (!currentAssignment || currentAssignment.tableNumber === newTableNumber) return
@@ -739,8 +1109,8 @@ export default function SeatingEditorPage({ params }: PageProps) {
                 </Card>
               )}
 
-              {/* Venue Floor */}
-              <Card className="p-6">
+              {/* Canvas Venue Floor */}
+              <Card className="relative overflow-hidden" style={{ height: "calc(100vh - 280px)", minHeight: "500px" }}>
                 <DndContext
                   sensors={sensors}
                   collisionDetection={closestCenter}
@@ -748,27 +1118,79 @@ export default function SeatingEditorPage({ params }: PageProps) {
                   onDragOver={handleDragOver}
                   onDragEnd={handleDragEnd}
                 >
-                  <div className="flex flex-wrap gap-x-6 gap-y-8 justify-center pb-2">
-                    {Array.from({ length: numTables }, (_, i) => {
-                      const tableNum = i + 1
-                      const tableGuests = assignmentsByTable.get(tableNum) || []
-                      const canDrag = !!preview
-                      const isOver = overTableId === `table-${tableNum}`
+                  {/* Canvas viewport */}
+                  <div
+                    ref={canvasRef}
+                    {...canvasBind()}
+                    className={cn(
+                      "canvas-background absolute inset-0 overflow-hidden",
+                      isPanning ? "cursor-grabbing" : "cursor-grab"
+                    )}
+                    style={{
+                      backgroundImage: "radial-gradient(circle, hsl(var(--muted-foreground) / 0.15) 1px, transparent 1px)",
+                      backgroundSize: `${20 * canvasTransform.scale}px ${20 * canvasTransform.scale}px`,
+                      backgroundPosition: `${canvasTransform.x * canvasTransform.scale}px ${canvasTransform.y * canvasTransform.scale}px`,
+                      touchAction: "none", // Prevent browser gestures
+                    }}
+                  >
+                    {/* Transformed content layer */}
+                    <div
+                      className="absolute origin-top-left transition-transform duration-75"
+                      style={{
+                        transform: `translate(${canvasTransform.x}px, ${canvasTransform.y}px) scale(${canvasTransform.scale})`,
+                      }}
+                    >
+                      {/* Tables */}
+                      {Array.from({ length: numTables }, (_, i) => {
+                        const tableNum = i + 1
+                        const tableGuests = assignmentsByTable.get(tableNum) || []
+                        const canDrag = !!preview
+                        const isOver = overTableId === `table-${tableNum}`
+                        const position = tablePositions.get(tableNum) || { x: 100, y: 100 }
 
-                      return (
-                        <CircularTable
-                          key={tableNum}
-                          tableNumber={tableNum}
-                          guests={tableGuests}
-                          maxSeats={tableSize}
-                          constraints={constraints || null}
-                          canDrag={canDrag}
-                          isOver={isOver}
-                        />
-                      )
-                    })}
+                        return (
+                          <DraggableTableWrapper
+                            key={tableNum}
+                            tableNumber={tableNum}
+                            position={position}
+                            onPositionChange={handleTablePositionChange}
+                            isDraggingTable={isDraggingTable}
+                            onDragStart={() => setIsDraggingTable(true)}
+                            onDragEnd={() => setIsDraggingTable(false)}
+                            canDragTable={!!preview}
+                          >
+                            <CircularTable
+                              tableNumber={tableNum}
+                              guests={tableGuests}
+                              maxSeats={tableSize}
+                              constraints={constraints || null}
+                              canDrag={canDrag}
+                              isOver={isOver}
+                            />
+                          </DraggableTableWrapper>
+                        )
+                      })}
+                    </div>
+
+                    {/* Empty state */}
+                    {numTables === 0 && (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+                        <Utensils className="w-12 h-12 text-muted-foreground/30 mb-4" />
+                        <p className="text-muted-foreground mb-1">{seatherderMessages.empty}</p>
+                        <p className="text-sm text-muted-foreground/60">Add guests to see the seating chart.</p>
+                      </div>
+                    )}
                   </div>
 
+                  {/* Canvas Controls */}
+                  <CanvasControls
+                    transform={canvasTransform}
+                    onZoomChange={handleZoomChange}
+                    onFitToView={handleFitToView}
+                    onResetLayout={handleResetLayout}
+                  />
+
+                  {/* Drag Overlay */}
                   <DragOverlay>
                     {activeDragGuest ? (
                       <GuestAvatar guest={activeDragGuest} size="lg" isDragging showTooltip={false} />
@@ -776,37 +1198,70 @@ export default function SeatingEditorPage({ params }: PageProps) {
                   </DragOverlay>
                 </DndContext>
 
-                {/* Empty state */}
-                {numTables === 0 && (
-                  <div className="flex flex-col items-center justify-center py-16 text-center">
-                    <Utensils className="w-12 h-12 text-muted-foreground/30 mb-4" />
-                    <p className="text-muted-foreground mb-1">{seatherderMessages.empty}</p>
-                    <p className="text-sm text-muted-foreground/60">Add guests to see the seating chart.</p>
+                {/* Legend - overlaid on canvas */}
+                <div className="absolute bottom-4 right-4 flex items-center gap-3 bg-background/95 backdrop-blur-sm border rounded-lg px-3 py-2 text-xs text-muted-foreground z-10">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-3 h-3 rounded-full bg-blue-500 flex items-center justify-center">
+                      <Pin className="w-2 h-2 text-white" />
+                    </div>
+                    <span>Pinned</span>
                   </div>
-                )}
-              </Card>
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-3 h-3 rounded-full bg-red-500 flex items-center justify-center">
+                      <Link2Off className="w-2 h-2 text-white" />
+                    </div>
+                    <span>Apart</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-3 h-3 rounded-full bg-green-500 flex items-center justify-center">
+                      <Link2 className="w-2 h-2 text-white" />
+                    </div>
+                    <span>Together</span>
+                  </div>
+                </div>
 
-              {/* Legend */}
-              <div className="mt-4 flex items-center justify-center gap-4 text-xs text-muted-foreground flex-wrap">
-                <div className="flex items-center gap-1.5">
-                  <div className="w-3.5 h-3.5 rounded-full bg-blue-500 flex items-center justify-center">
-                    <Pin className="w-2 h-2 text-white" />
-                  </div>
-                  <span>Pinned</span>
+                {/* Help overlay */}
+                <div className="absolute top-4 left-4 bg-background/95 backdrop-blur-sm border rounded-lg px-4 py-3 text-xs z-10 max-w-xs">
+                  {!preview ? (
+                    // No preview yet - show getting started help
+                    <div className="space-y-2">
+                      <p className="font-medium text-foreground flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-amber-600" />
+                        Getting Started
+                      </p>
+                      <p className="text-muted-foreground">
+                        Click <span className="font-medium text-amber-600">&quot;Let me think&quot;</span> to generate seating assignments, then you can manually adjust.
+                      </p>
+                    </div>
+                  ) : (
+                    // In preview mode - show controls help
+                    <div className="space-y-2">
+                      <p className="font-medium text-foreground flex items-center gap-2">
+                        <Move className="w-4 h-4 text-primary" />
+                        Canvas Controls
+                      </p>
+                      <div className="space-y-1 text-muted-foreground">
+                        <p className="flex items-center gap-2">
+                          <span className="w-4 h-4 rounded bg-muted flex items-center justify-center text-[10px]">⊙</span>
+                          Drag background to pan
+                        </p>
+                        <p className="flex items-center gap-2">
+                          <span className="w-4 h-4 rounded bg-muted flex items-center justify-center text-[10px]">⇅</span>
+                          Scroll to zoom in/out
+                        </p>
+                        <p className="flex items-center gap-2">
+                          <span className="w-4 h-4 rounded bg-amber-700 flex items-center justify-center text-[10px] text-white">◉</span>
+                          Drag table center to move
+                        </p>
+                        <p className="flex items-center gap-2">
+                          <span className="w-4 h-4 rounded bg-primary/20 flex items-center justify-center text-[10px]">👤</span>
+                          Drag guests between tables
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <div className="w-3.5 h-3.5 rounded-full bg-red-500 flex items-center justify-center">
-                    <Link2Off className="w-2 h-2 text-white" />
-                  </div>
-                  <span>Keep apart</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <div className="w-3.5 h-3.5 rounded-full bg-green-500 flex items-center justify-center">
-                    <Link2 className="w-2 h-2 text-white" />
-                  </div>
-                  <span>Together</span>
-                </div>
-              </div>
+              </Card>
             </div>
 
             {/* Constraints Panel */}
