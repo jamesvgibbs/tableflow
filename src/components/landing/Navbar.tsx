@@ -47,17 +47,38 @@ export const Navbar = () => {
                 {link.label}
               </motion.a>
             ))}
+            <motion.div whileHover={{ y: -2 }}>
+              <Link
+                href="/checkin"
+                className="text-sm font-bold text-primary hover:text-primary/80 transition-colors flex items-center gap-1"
+              >
+                Check In
+                <span className="text-xs">🐾</span>
+              </Link>
+            </motion.div>
           </div>
 
-          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-            <Button variant="default" size="sm" className="font-bold" asChild>
-              <Link href="/login">
-                <Sparkles className="w-4 h-4" />
-                Get Started
-                <span>🐾</span>
-              </Link>
-            </Button>
-          </motion.div>
+          <div className="flex items-center gap-3">
+            {/* Check In link - visible on mobile for guests */}
+            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="md:hidden">
+              <Button variant="outline" size="sm" className="font-bold" asChild>
+                <Link href="/checkin">
+                  Check In
+                  <span>🐾</span>
+                </Link>
+              </Button>
+            </motion.div>
+
+            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+              <Button variant="default" size="sm" className="font-bold" asChild>
+                <Link href="/login">
+                  <Sparkles className="w-4 h-4" />
+                  Get Started
+                  <span>🐾</span>
+                </Link>
+              </Button>
+            </motion.div>
+          </div>
         </div>
       </div>
     </motion.nav>
