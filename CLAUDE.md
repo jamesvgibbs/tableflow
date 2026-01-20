@@ -4,7 +4,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Seatherder** is an event seating management application for automating table assignments and guest check-ins. Core features include multi-round seating, QR code check-in, and event theming.
+**Seatherder** is an event seating management application for automating table assignments and guest check-ins. The product persona is a confident, slightly sarcastic border collie who is software. See `VOICE_AND_TONE.md` for all user-facing copy guidelines.
+
+**Core Features:**
+- Multi-round seating with smart mixing algorithm
+- QR code check-in (guest and table)
+- Real-time round timer with pause/resume
+- Event theming with 8 presets + custom colors
+- Email campaigns (invitations, confirmations)
+- Seating constraints (pin, repel, attract)
+- Drag-and-drop seating editor with canvas pan/zoom
+- Custom terminology per event type
 
 ## Development Commands
 
@@ -23,36 +33,58 @@ Next.js 16 App Router with React 19, using Convex as the serverless backend.
 
 ### Tech Stack
 - **Framework**: Next.js 16 with App Router (React Server Components)
-- **Backend**: Convex (real-time database, serverless functions)
-- **Styling**: Tailwind CSS v4 with CSS variables for theming
+- **Backend**: Convex 1.31+ (real-time database, serverless functions)
+- **Styling**: Tailwind CSS v4 with CSS variables (OKLCH color space)
 - **UI Components**: shadcn/ui (new-york style) with Radix UI primitives
 - **Icons**: Lucide React
+- **Animations**: Framer Motion, tw-animate-css
+- **Drag & Drop**: @dnd-kit/core (guest reordering), @use-gesture/react (canvas pan/zoom)
+- **Data Import**: PapaParse (CSV), XLSX (Excel)
 - **State**: Convex React hooks for real-time data
 
 ### Project Structure
 ```
 src/
-├── app/                    # Next.js pages and layouts
-│   ├── admin/              # Protected admin dashboard
-│   ├── event/[id]/         # Event management (guests, settings, themes, assignments)
-│   ├── checkin/            # Guest name search check-in
-│   ├── scan/[qrCodeId]/    # QR code scanner (guest or table lookup)
-│   ├── timer/[eventId]/    # Full-screen round timer
-│   ├── login/              # Admin login
-│   └── api/auth/           # Auth API routes
+├── app/
+│   ├── (app)/                  # Protected application routes
+│   │   ├── admin/              # Events dashboard
+│   │   ├── event/[id]/         # Event hub
+│   │   │   ├── seating/        # View tables & guests
+│   │   │   ├── seating-editor/ # Visual drag-and-drop editor
+│   │   │   ├── live/           # Real-time event mode with timer
+│   │   │   ├── matching/       # Seating configuration wizard
+│   │   │   └── emails/         # Email campaign management
+│   │   ├── checkin/            # Guest name search check-in
+│   │   ├── scan/[qrCodeId]/    # QR code scanner (guest or table)
+│   │   ├── timer/[eventId]/    # Full-screen round timer
+│   │   └── login/              # Admin login
+│   ├── (marketing)/            # Public landing page
+│   └── api/auth/               # Auth API routes
 ├── components/
-│   ├── ui/                 # shadcn/ui components
-│   └── feature/            # Feature components (GuestForm, CsvUpload, ThemeCustomizer, etc.)
+│   ├── ui/                     # shadcn/ui components (24+)
+│   └── landing/                # Marketing page sections (12)
+│   # Feature components at root: GuestForm, CsvUpload, ThemeCustomizer, etc.
 ├── lib/
-│   ├── utils.ts            # cn() helper for class merging
-│   ├── auth.ts             # Auth utilities (currently hardcoded credentials)
-│   └── types.ts            # Shared TypeScript types
-└── providers/              # Context providers (Auth, Convex, Theme)
+│   ├── utils.ts                # cn() helper, getDepartmentColors()
+│   ├── types.ts                # Shared TypeScript types
+│   ├── terminology.ts          # Custom label helpers
+│   ├── theme-presets.ts        # 8 theme definitions
+│   ├── config-mapper.ts        # Wizard answers → matching weights
+│   └── auth.ts                 # Auth utilities (dev only)
+└── providers/                  # Context providers (Auth, Convex, Theme)
 
 convex/
-├── schema.ts               # Database schema definition
-├── events.ts               # Event queries and mutations
-└── guests.ts               # Guest queries and mutations
+├── schema.ts                   # Database schema (11 tables)
+├── events.ts                   # Event queries/mutations (~700 lines)
+├── guests.ts                   # Guest queries/mutations (~330 lines)
+├── tables.ts                   # Table queries
+├── matching.ts                 # Compatibility scoring algorithm
+├── matchingConfig.ts           # Per-event algorithm config
+├── constraints.ts              # Pin/repel/attract constraints
+├── preview.ts                  # Preview assignments system
+├── email.ts                    # Email sending actions
+├── attachments.ts              # File storage for emails
+└── http.ts                     # HTTP helpers
 ```
 
 ### Path Aliases
@@ -62,15 +94,22 @@ convex/
 
 ### Schema (convex/schema.ts)
 
-**events** - Event configuration
-- `name`, `tableSize`, `createdAt`, `isAssigned`
-- Multi-round: `numberOfRounds`, `roundDuration`, `currentRound`, `roundStartedAt`
-- Timer: `isPaused`, `pausedTimeRemaining`
-- Theme: `themePreset`, `customColors` (object with primary, secondary, accent, background, foreground, muted)
+**11 tables with 21 indexes:**
 
-**guests** - Event attendees
-- `eventId`, `name`, `department`, `email`, `phone`
-- `tableNumber` (Round 1 for backward compat), `qrCodeId`, `checkedIn`
+**events** - Event configuration
+- Core: `name`, `tableSize`, `createdAt`, `isAssigned`
+- Multi-round: `numberOfRounds`, `roundDuration`, `currentRound`, `roundStartedAt`, `isPaused`, `pausedTimeRemaining`
+- Theme: `themePreset`, `customColors` (6 OKLCH colors)
+- Email: `emailSettings` (sender name, reply-to, custom subjects)
+- Terminology: `eventType`, `eventTypeSettings` (custom labels)
+
+**guests** - Event attendees (rich attributes)
+- Core: `eventId`, `name`, `department`, `email`, `phone`
+- Seating: `tableNumber` (Round 1 compat), `qrCodeId`, `checkedIn`
+- Dietary: `dietary.restrictions[]`, `dietary.notes`
+- Matching: `attributes.interests[]`, `attributes.jobLevel`, `attributes.goals[]`, `attributes.customTags[]`
+- Event-specific: `familyName`, `side` (wedding), `company`, `team`, `managementLevel`, `isVip`
+- Email tracking: `invitationSentAt`, `confirmationSentAt`, `emailUnsubscribed`
 - Indexes: `by_event`, `by_qrCodeId`, `by_name`
 
 **tables** - Physical tables
@@ -81,48 +120,160 @@ convex/
 - `guestId`, `eventId`, `roundNumber`, `tableNumber`
 - Indexes: `by_guest`, `by_event_round`, `by_event_guest`
 
+**matchingConfig** - Algorithm settings per event
+- `eventId`, `seatingType` (wedding|corporate|networking|team|social|custom)
+- `answers` (wizard Q&A stored as JSON)
+- `weights` (5 numeric: departmentMix, interestAffinity, jobLevelDiversity, goalCompatibility, repeatAvoidance)
+- `vipTables[]`, `interestOptions[]`, `goalOptions[]`
+- Index: `by_event`
+
+**seatingConstraints** - Manual seating control
+- `eventId`, `type` (pin|repel|attract)
+- `guestIds[]` (1 for pin, 2 for repel/attract)
+- `tableNumber` (pin only), `reason`, `createdAt`
+- Indexes: `by_event`, `by_guest`
+
+**previewAssignments** - Ephemeral preview sessions
+- `eventId`, `sessionId`, `guestId`, `roundNumber`, `tableNumber`, `createdAt`
+- Indexes: `by_session`, `by_event`
+
+**emailLogs** - Delivery tracking
+- `eventId`, `guestId`, `type`, `status`, `resendId`, `sentAt`, `deliveredAt`, `errorMessage`
+- Indexes: `by_event`, `by_guest`, `by_resend_id`, `by_status`
+
+**emailAttachments** - File storage
+- `eventId`, `guestId`, `filename`, `storageId`, `contentType`, `size`
+- Indexes: `by_event`, `by_guest`
+
 ### Key Convex Functions
 
-**Events** (`convex/events.ts`):
-- `list()` - All events sorted by date
-- `create()` - New event with defaults
-- `assignTables()` - Generate randomized assignments (department-mixing for R1, tablemate-avoidance for R2+)
-- `updateNumberOfRounds()` - Modify rounds with smart regeneration
-- `startNextRound()`, `pauseRound()`, `resumeRound()`, `endCurrentRound()` - Timer control
-- `updateThemePreset()`, `updateCustomColors()` - Theme mutations
+**events.ts** - Event management
+- `list()`, `get(id)`, `getWithDetails(id)` - Queries
+- `create()`, `updateName()`, `updateTableSize()`, `updateRoundDuration()`
+- `updateNumberOfRounds()` - Smart regeneration of round assignments
+- `assignTables()` - Core matching algorithm with constraint satisfaction
+- `startNextRound()`, `pauseRound()`, `resumeRound()`, `endCurrentRound()` - Timer
+- `updateThemePreset()`, `updateCustomColors()` - Theming
+- `randomizeAssignments()` - Regenerate mid-event
 
-**Guests** (`convex/guests.ts`):
-- `create()`, `createMany()` - Add guests
-- `getByEvent()` - All guests for an event
+**guests.ts** - Guest management
+- `getByEvent()`, `getByQrCodeId()`, `getRoundAssignments()`
 - `searchByName()` - Cross-event name search for check-in
-- `getByQrCodeId()` - Lookup by QR code with round assignments
-- `checkIn()`, `uncheckIn()` - Check-in management
+- `create()`, `createMany()`, `update()`, `remove()`
+- `checkIn()`, `uncheckIn()` - Triggers confirmation email
 
-## Authentication (Current State)
+**preview.ts** - Preview system
+- `generatePreview()` - Create temporary assignments
+- `getPreview()` - Fetch with guest data enrichment
+- `commitPreview()` - Finalize to real assignments
+- `discardPreview()`, `cleanupExpiredPreviews()` - Cleanup
+- `updatePreviewAssignment()` - Drag-and-drop updates
 
-**WARNING**: Current auth is for development only - hardcoded credentials in `src/lib/auth.ts`.
-- Username: `admin`, Password: `seatherder123`
-- Cookie-based sessions with HTTP-only cookie `seatherder_session`
-- Protected routes use `ProtectedRoute` component wrapper
+**constraints.ts** - Seating constraints
+- `create()` - Add pin/repel/attract with validation
+- `getByEvent()` - All constraints for event
+- `delete()` - Remove constraint
 
-Production requires: Clerk or similar auth provider, environment variables, proper session management.
+**matching.ts** - Scoring utilities (pure functions)
+- `calculateGuestCompatibility()` - 5-dimension scoring
+- `DEFAULT_WEIGHTS` constant
+- Goal compatibility matrix, job level distance calculation
 
-## Styling Conventions
+**email.ts** - Email campaigns
+- `sendCheckInConfirmation()` - Triggered on check-in
+- `sendInvitations()`, `sendReminders()` - Bulk campaigns
+- Template placeholders: `{{guest_name}}`, `{{event_name}}`, `{{table_number}}`
 
-- CSS variables in `globals.css` for theming (OKLCH color space)
-- Use `cn()` from `@/lib/utils` to merge Tailwind classes
-- shadcn/ui components use class-variance-authority (cva) for variants
-- Event themes override CSS variables dynamically
+## Advanced Features
+
+### Multi-Round Seating
+- Rounds stored in `guestRoundAssignments` junction table
+- `repeatAvoidance` weight (0-1) prevents same tablemates across rounds
+- Round timer with pause/resume capability
+- Different optimal seating calculated per round
+
+### Preview System
+Preview assignments before committing:
+```tsx
+await generatePreview({ eventId })        // Create preview
+const preview = useQuery(api.preview.getPreview, { eventId })
+await commitPreview({ eventId })          // Finalize
+await discardPreview({ eventId })         // Cancel
+```
+
+### Seating Constraints
+- **Pin**: Force guest to specific table (scoring: -10000 bonus, +10000 penalty elsewhere)
+- **Repel**: Keep two guests apart (+5000 penalty if together)
+- **Attract**: Encourage two guests together (-500 bonus if together)
+
+### Matching Algorithm
+Scoring system (lower = better):
+1. Constraint satisfaction (highest priority)
+2. Department mixing
+3. Interest affinity
+4. Job level diversity
+5. Goal compatibility (matrix-based)
+6. Repeat avoidance (tablemate history)
+
+### Event Types & Wizard
+6 types: wedding, corporate, networking, team, social, custom
+- Wizard asks 2-3 questions per type
+- Answers map to matching weights via `config-mapper.ts`
+- Generates human-readable confirmation
+
+### Terminology Customization
+Per-event custom labels stored in `eventTypeSettings`:
+```tsx
+const guestLabel = getGuestLabel(event)           // "Guest" or "Attendee"
+const tableLabel = getTableLabel(event)           // "Table" or "Pod"
+const countLabel = getCountLabel(event, 5, "guest") // "5 Guests"
+```
+
+## Styling & Theming
+
+### Color System (OKLCH)
+Root variables in `globals.css`:
+- **Primary**: `oklch(0.42 0.28 295)` - Purple #6700D9
+- **Secondary**: `oklch(0.96 0.02 290)` - Pale purple #F0F1FF
+- **Accent**: `oklch(0.85 0.15 175)` - Teal #00F0D2
+
+### Theme Presets
+8 themes: Desert Disco, Groovy, Art Nouveau, Abstract Landscape, Desert Matisse, Woodcut, Linocut, Cyberpunk
+
+### Department Colors
+`getDepartmentColors(department)` returns consistent `{ bg, text, border }` classes:
+- 10 predefined departments (engineering, design, marketing, etc.)
+- Fallback system for unknown departments
+
+### Animations
+Custom classes in `globals.css`: `animate-in`, `fade-in`, `slide-up`, `scale-in`
+Stagger system: `stagger-1` through `stagger-10` (50ms delays)
 
 ### Adding UI Components
 ```bash
 npx shadcn@latest add [component-name]
 ```
 
+## Voice & Tone
+
+**All user-facing copy must follow `VOICE_AND_TONE.md`.**
+
+Key principles:
+- First person only ("I" never "we" or "Seatherder")
+- Short, declarative sentences
+- Confident border collie persona
+- Dog/herding metaphors where natural
+- No corporate jargon (leverage, synergy, optimize)
+
+Examples:
+- Button: "Let me work" (not "Submit")
+- Empty state: "I do not see any guests yet. Would you like to add some?"
+- Success: "Good job. The seating is complete."
+- Pause button: "Paws" (dog pun)
+
 ## Key Patterns
 
 ### Real-time Data
-Use Convex hooks for live updates:
 ```tsx
 const events = useQuery(api.events.list)
 const guests = useQuery(api.guests.getByEvent, { eventId })
@@ -141,13 +292,52 @@ await createEvent({ name: "My Event", tableSize: 8 })
 </ProtectedRoute>
 ```
 
+### Loading States
+Use `<SeatherderLoading />` component for consistent branded loading.
+
+### Theme Application
+```tsx
+import { EventThemeProvider } from "@/components/event-theme-provider"
+// Applies customColors as CSS variables to document
+```
+
+## Authentication (Development Only)
+
+**WARNING**: Current auth is hardcoded for development.
+- Username: `admin`, Password: `seatherder123`
+- Cookie: `seatherder_session` (HTTP-only)
+- Protected routes use `ProtectedRoute` wrapper
+
+**Production requires:**
+1. Clerk or similar auth provider (Convex has first-party support)
+2. Environment variables for secrets
+3. Proper session management
+4. Row-level security in Convex functions
+
+## App Routes
+
+| Route | Purpose | Access |
+|-------|---------|--------|
+| `/` | Landing page or admin redirect | Public |
+| `/admin` | Events dashboard | Protected |
+| `/event/[id]` | Event hub with navigation | Protected |
+| `/event/[id]/seating` | View tables & assignments | Protected |
+| `/event/[id]/seating-editor` | Visual drag-and-drop editor | Protected |
+| `/event/[id]/live` | Real-time mode with timer | Protected |
+| `/event/[id]/matching` | Seating config wizard | Protected |
+| `/event/[id]/emails` | Email campaigns | Protected |
+| `/checkin` | Guest name search | Public |
+| `/scan/[qrCodeId]` | QR lookup (guest/table) | Public |
+| `/timer/[eventId]` | Full-screen round timer | Public |
+| `/login` | Admin authentication | Public |
+
 ## Multi-Tenant Considerations
 
 Current: Single-tenant with shared admin access.
 
 For multi-tenant:
 1. Add organization/user tables to Convex schema
-2. Integrate Clerk for auth (Convex has first-party Clerk support)
+2. Integrate Clerk for auth
 3. Add `organizationId` to events table
 4. Implement row-level security in Convex functions
 5. Update all queries to filter by authenticated user's org

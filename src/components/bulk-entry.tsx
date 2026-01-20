@@ -52,14 +52,14 @@ export function BulkEntry({ onAddGuests }: BulkEntryProps) {
 
     const trimmedText = text.trim()
     if (!trimmedText) {
-      setError("Please enter at least one guest name")
+      setError("I need at least one name.")
       return
     }
 
     const guests = parseInput(trimmedText)
 
     if (guests.length === 0) {
-      setError("No valid guest names found")
+      setError("I could not find any names in there.")
       return
     }
 
@@ -80,7 +80,7 @@ export function BulkEntry({ onAddGuests }: BulkEntryProps) {
         <Card className="p-3 bg-muted/30">
           <CardContent className="p-0 space-y-2">
             <p className="text-sm text-muted-foreground">
-              Format instructions:
+              Here is how to do it:
             </p>
             <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
               <li>One name per line</li>
@@ -109,7 +109,7 @@ export function BulkEntry({ onAddGuests }: BulkEntryProps) {
       </div>
 
       <Button type="submit" className="w-full">
-        Add Guests
+        Add these guests
       </Button>
     </form>
   )

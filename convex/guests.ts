@@ -1,5 +1,6 @@
 import { v } from "convex/values"
 import { mutation, query } from "./_generated/server"
+import { api } from "./_generated/api"
 import { Id } from "./_generated/dataModel"
 
 // Get all guests for an event
@@ -122,6 +123,14 @@ export const searchByName = query({
   },
 })
 
+// Validator for matching attributes
+const attributesValidator = v.optional(v.object({
+  interests: v.optional(v.array(v.string())),
+  jobLevel: v.optional(v.string()),
+  goals: v.optional(v.array(v.string())),
+  customTags: v.optional(v.array(v.string())),
+}))
+
 // Add a single guest
 export const create = mutation({
   args: {
@@ -130,6 +139,18 @@ export const create = mutation({
     department: v.optional(v.string()),
     email: v.optional(v.string()),
     phone: v.optional(v.string()),
+    dietary: v.optional(v.object({
+      restrictions: v.array(v.string()),
+      notes: v.optional(v.string()),
+    })),
+    attributes: attributesValidator,
+    // Event-type specific fields
+    familyName: v.optional(v.string()),
+    side: v.optional(v.string()),
+    company: v.optional(v.string()),
+    team: v.optional(v.string()),
+    managementLevel: v.optional(v.string()),
+    isVip: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     return await ctx.db.insert("guests", {
@@ -138,6 +159,14 @@ export const create = mutation({
       department: args.department,
       email: args.email,
       phone: args.phone,
+      dietary: args.dietary,
+      attributes: args.attributes,
+      familyName: args.familyName,
+      side: args.side,
+      company: args.company,
+      team: args.team,
+      managementLevel: args.managementLevel,
+      isVip: args.isVip,
       checkedIn: false,
     })
   },
@@ -153,6 +182,23 @@ export const createMany = mutation({
         department: v.optional(v.string()),
         email: v.optional(v.string()),
         phone: v.optional(v.string()),
+        dietary: v.optional(v.object({
+          restrictions: v.array(v.string()),
+          notes: v.optional(v.string()),
+        })),
+        attributes: v.optional(v.object({
+          interests: v.optional(v.array(v.string())),
+          jobLevel: v.optional(v.string()),
+          goals: v.optional(v.array(v.string())),
+          customTags: v.optional(v.array(v.string())),
+        })),
+        // Event-type specific fields
+        familyName: v.optional(v.string()),
+        side: v.optional(v.string()),
+        company: v.optional(v.string()),
+        team: v.optional(v.string()),
+        managementLevel: v.optional(v.string()),
+        isVip: v.optional(v.boolean()),
       })
     ),
   },
@@ -165,6 +211,14 @@ export const createMany = mutation({
         department: guest.department,
         email: guest.email,
         phone: guest.phone,
+        dietary: guest.dietary,
+        attributes: guest.attributes,
+        familyName: guest.familyName,
+        side: guest.side,
+        company: guest.company,
+        team: guest.team,
+        managementLevel: guest.managementLevel,
+        isVip: guest.isVip,
         checkedIn: false,
       })
       ids.push(id)
@@ -202,7 +256,23 @@ export const removeAllFromEvent = mutation({
 export const checkIn = mutation({
   args: { id: v.id("guests") },
   handler: async (ctx, args) => {
+    // Get guest to check if they have an email and aren't already checked in
+    const guest = await ctx.db.get(args.id)
+    if (!guest) {
+      throw new Error("Guest not found")
+    }
+
+    // Update check-in status
     await ctx.db.patch(args.id, { checkedIn: true })
+
+    // Schedule confirmation email if guest has email and hasn't received one yet
+    // The action will handle checking for unsubscribed status and API configuration
+    if (guest.email && !guest.confirmationSentAt) {
+      // Schedule the action to run immediately (0ms delay)
+      await ctx.scheduler.runAfter(0, api.email.sendCheckInConfirmation, {
+        guestId: args.id,
+      })
+    }
   },
 })
 
@@ -211,5 +281,47 @@ export const uncheckIn = mutation({
   args: { id: v.id("guests") },
   handler: async (ctx, args) => {
     await ctx.db.patch(args.id, { checkedIn: false })
+  },
+})
+
+// Update a guest's information
+export const update = mutation({
+  args: {
+    id: v.id("guests"),
+    name: v.optional(v.string()),
+    department: v.optional(v.string()),
+    email: v.optional(v.string()),
+    phone: v.optional(v.string()),
+    dietary: v.optional(v.object({
+      restrictions: v.array(v.string()),
+      notes: v.optional(v.string()),
+    })),
+    attributes: v.optional(v.object({
+      interests: v.optional(v.array(v.string())),
+      jobLevel: v.optional(v.string()),
+      goals: v.optional(v.array(v.string())),
+      customTags: v.optional(v.array(v.string())),
+    })),
+    // Event-type specific fields
+    familyName: v.optional(v.string()),
+    side: v.optional(v.string()),
+    company: v.optional(v.string()),
+    team: v.optional(v.string()),
+    managementLevel: v.optional(v.string()),
+    isVip: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    const { id, ...updates } = args
+    // Filter out undefined values to avoid overwriting with undefined
+    const filteredUpdates: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(updates)) {
+      if (value !== undefined) {
+        filteredUpdates[key] = value
+      }
+    }
+    if (Object.keys(filteredUpdates).length > 0) {
+      await ctx.db.patch(id, filteredUpdates)
+    }
+    return await ctx.db.get(id)
   },
 })

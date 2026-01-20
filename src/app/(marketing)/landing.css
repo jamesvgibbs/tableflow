@@ -1,0 +1,725 @@
+/*
+ * Landing Page Styles - Seatherder Marketing
+ * These styles only apply to the marketing/landing pages
+ * Matches Lovable's playful kawaii pink palette
+ */
+
+@import url("https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800;900&family=Fredoka:wght@400;500;600;700&display=swap");
+
+/* Landing page color overrides */
+.landing-page {
+  /* Playful kawaii pink palette - complete HSL values for Tailwind v4 */
+  --background: hsl(350 100% 97%);
+  --foreground: hsl(280 30% 20%);
+
+  --card: hsl(350 80% 98%);
+  --card-foreground: hsl(280 30% 20%);
+
+  --popover: hsl(350 80% 98%);
+  --popover-foreground: hsl(280 30% 20%);
+
+  /* Hot pink primary */
+  --primary: hsl(340 82% 52%);
+  --primary-foreground: hsl(0 0% 100%);
+
+  /* Soft lavender secondary */
+  --secondary: hsl(280 50% 92%);
+  --secondary-foreground: hsl(280 40% 35%);
+
+  /* Cream muted */
+  --muted: hsl(40 40% 94%);
+  --muted-foreground: hsl(280 20% 45%);
+
+  /* Sunny yellow accent */
+  --accent: hsl(45 100% 60%);
+  --accent-foreground: hsl(280 30% 15%);
+
+  /* Mint success */
+  --success: hsl(160 60% 50%);
+  --success-foreground: hsl(0 0% 100%);
+
+  --destructive: hsl(0 84% 60%);
+  --destructive-foreground: hsl(0 0% 100%);
+
+  /* Very subtle borders */
+  --border: hsl(340 30% 88%);
+  --input: hsl(340 30% 90%);
+  --ring: hsl(340 82% 52%);
+
+  --radius: 1.5rem;
+
+  /* Custom design tokens - include emoji font fallbacks */
+  --font-display:
+    "Fredoka", "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji",
+    "Comic Sans MS", cursive;
+  --font-body:
+    "Nunito", "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji",
+    "Comic Sans MS", sans-serif;
+
+  /* Playful shadows - softer pink tint */
+  --shadow-soft: 0 4px 20px -4px hsl(340 82% 52% / 0.15);
+  --shadow-card: 0 8px 30px -8px hsl(340 82% 52% / 0.2);
+  --shadow-elevated: 0 20px 50px -15px hsl(340 82% 52% / 0.25);
+  --shadow-glow: 0 0 40px hsl(340 82% 52% / 0.3);
+
+  /* Gradients */
+  --gradient-bubblegum: linear-gradient(
+    135deg,
+    hsl(350 80% 95%) 0%,
+    hsl(280 50% 95%) 50%,
+    hsl(200 70% 95%) 100%
+  );
+  --gradient-rainbow: linear-gradient(
+    135deg,
+    hsl(340 82% 65%) 0%,
+    hsl(280 70% 65%) 50%,
+    hsl(200 80% 60%) 100%
+  );
+  --gradient-sunset: linear-gradient(
+    135deg,
+    hsl(340 82% 60%) 0%,
+    hsl(30 90% 60%) 100%
+  );
+
+  /* Sidebar tokens (for consistency) */
+  --sidebar-background: hsl(350 100% 97%);
+  --sidebar-foreground: hsl(280 30% 20%);
+  --sidebar-primary: hsl(340 82% 52%);
+  --sidebar-primary-foreground: hsl(0 0% 100%);
+  --sidebar-accent: hsl(280 50% 92%);
+  --sidebar-accent-foreground: hsl(280 40% 35%);
+  --sidebar-border: hsl(340 30% 88%);
+  --sidebar-ring: hsl(340 82% 52%);
+
+  /* Apply body styles */
+  background-image: var(--gradient-bubblegum);
+  background-attachment: fixed;
+  font-family: var(--font-body);
+}
+
+/* Dark mode for landing pages */
+.landing-page.dark {
+  --background: hsl(280 30% 8%);
+  --foreground: hsl(350 50% 95%);
+
+  --card: hsl(280 25% 12%);
+  --card-foreground: hsl(350 50% 95%);
+
+  --popover: hsl(280 25% 12%);
+  --popover-foreground: hsl(350 50% 95%);
+
+  --primary: hsl(340 75% 60%);
+  --primary-foreground: hsl(280 30% 8%);
+
+  --secondary: hsl(280 40% 25%);
+  --secondary-foreground: hsl(350 50% 90%);
+
+  --muted: hsl(280 20% 18%);
+  --muted-foreground: hsl(340 30% 60%);
+
+  --accent: hsl(45 90% 50%);
+  --accent-foreground: hsl(280 30% 8%);
+
+  --success: hsl(160 50% 45%);
+  --success-foreground: hsl(0 0% 100%);
+
+  --destructive: hsl(0 62% 30%);
+  --destructive-foreground: hsl(350 50% 95%);
+
+  --border: hsl(280 20% 25%);
+  --input: hsl(280 20% 25%);
+  --ring: hsl(340 75% 60%);
+
+  --sidebar-background: hsl(280 30% 10%);
+  --sidebar-foreground: hsl(350 50% 95%);
+  --sidebar-primary: hsl(340 75% 60%);
+  --sidebar-primary-foreground: hsl(280 30% 8%);
+  --sidebar-accent: hsl(280 40% 25%);
+  --sidebar-accent-foreground: hsl(350 50% 90%);
+  --sidebar-border: hsl(280 20% 25%);
+  --sidebar-ring: hsl(340 75% 60%);
+
+  background-image: none;
+  background-color: var(--background);
+}
+
+/* Override font-serif to use Fredoka display font */
+.landing-page h1,
+.landing-page h2,
+.landing-page h3,
+.landing-page h4,
+.landing-page h5,
+.landing-page h6,
+.landing-page .font-display {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+/* Confetti particles background */
+.landing-page .confetti-bg {
+  background-image:
+    radial-gradient(
+      circle at 10% 20%,
+      hsl(340 82% 65% / 0.12) 2px,
+      transparent 2px
+    ),
+    radial-gradient(
+      circle at 90% 10%,
+      hsl(45 100% 60% / 0.12) 3px,
+      transparent 3px
+    ),
+    radial-gradient(
+      circle at 30% 80%,
+      hsl(280 70% 65% / 0.12) 2px,
+      transparent 2px
+    ),
+    radial-gradient(
+      circle at 80% 70%,
+      hsl(160 60% 50% / 0.12) 2px,
+      transparent 2px
+    ),
+    radial-gradient(
+      circle at 50% 50%,
+      hsl(200 80% 60% / 0.08) 3px,
+      transparent 3px
+    );
+  background-size: 100px 100px;
+  animation: confetti-drift 20s linear infinite;
+}
+
+@keyframes confetti-drift {
+  0% {
+    background-position:
+      0 0,
+      50px 50px,
+      100px 100px,
+      150px 50px,
+      200px 100px;
+  }
+  100% {
+    background-position:
+      100px 100px,
+      150px 150px,
+      200px 200px,
+      250px 150px,
+      300px 200px;
+  }
+}
+
+/* WOOF badge - yellow with no harsh border */
+.landing-page .badge-woof {
+  background: var(--accent);
+  color: var(--accent-foreground);
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-weight: 700;
+  font-size: 0.75rem;
+  box-shadow: var(--shadow-card);
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  transform: rotate(-6deg);
+  border: none;
+}
+
+@media (min-width: 768px) {
+  .landing-page .badge-woof {
+    padding: 0.5rem 1.25rem;
+    font-size: 0.875rem;
+    gap: 0.5rem;
+  }
+}
+
+/* Speech bubble with pointer */
+.landing-page .speech-bubble,
+.landing-page [class*="SpeechBubble"] {
+  position: relative;
+  background: var(--card);
+  border-radius: 1.5rem;
+  padding: 1.5rem;
+  box-shadow: var(--shadow-card);
+  border: 2px solid color-mix(in srgb, var(--primary) 15%, transparent) !important;
+}
+
+.landing-page .speech-bubble::after {
+  content: "";
+  position: absolute;
+  bottom: -1rem;
+  left: 2rem;
+  width: 0;
+  height: 0;
+  border-left: 1rem solid transparent;
+  border-right: 1rem solid transparent;
+  border-top: 1.25rem solid var(--card);
+}
+
+/* Stats card style - very subtle border */
+.landing-page .stat-card {
+  background: color-mix(in srgb, var(--card) 90%, transparent);
+  backdrop-filter: blur(8px);
+  border-radius: 1rem;
+  padding: 0.5rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--primary) 10%, transparent);
+  box-shadow: var(--shadow-soft);
+}
+
+/* Shadow utilities */
+.landing-page .shadow-soft {
+  box-shadow: var(--shadow-soft);
+}
+
+.landing-page .shadow-card {
+  box-shadow: var(--shadow-card);
+}
+
+.landing-page .shadow-elevated {
+  box-shadow: var(--shadow-elevated);
+}
+
+/* Text gradient */
+.landing-page .text-gradient-pink {
+  background: linear-gradient(
+    to right,
+    hsl(340 82% 52%),
+    hsl(330 70% 55%),
+    hsl(45 100% 55%)
+  );
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Navbar styling - subtle bottom border */
+.landing-page nav {
+  border-bottom: 1px solid color-mix(in srgb, var(--primary) 10%, transparent) !important;
+}
+
+/* Accordion styling - softer borders */
+.landing-page [data-state] {
+  border-color: color-mix(in srgb, var(--primary) 10%, transparent) !important;
+}
+
+/* Animations */
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  25% {
+    transform: translateY(-15px) rotate(3deg);
+  }
+  75% {
+    transform: translateY(-8px) rotate(-3deg);
+  }
+}
+
+@keyframes bounce-gentle {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes wiggle {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(-8deg);
+  }
+  75% {
+    transform: rotate(8deg);
+  }
+}
+
+.landing-page .animate-float {
+  animation: float 4s ease-in-out infinite;
+}
+
+.landing-page .animate-bounce-gentle {
+  animation: bounce-gentle 2s ease-in-out infinite;
+}
+
+.landing-page .animate-wiggle {
+  animation: wiggle 1s ease-in-out infinite;
+}
+
+.landing-page .animate-wobble {
+  animation: wobble 0.5s ease-in-out;
+}
+
+.landing-page .animate-sparkle {
+  animation: sparkle 2s ease-in-out infinite;
+}
+
+.landing-page .animate-tail-wag {
+  animation: tail-wag 0.3s ease-in-out infinite;
+}
+
+.landing-page .animate-paw-wave {
+  animation: paw-wave 0.6s ease-in-out infinite;
+}
+
+/* Additional keyframe animations */
+@keyframes wobble {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(-3deg);
+  }
+  50% {
+    transform: rotate(3deg);
+  }
+  75% {
+    transform: rotate(-1deg);
+  }
+}
+
+@keyframes sparkle {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(1.3);
+  }
+}
+
+@keyframes tail-wag {
+  0%,
+  100% {
+    transform: rotate(-15deg);
+  }
+  50% {
+    transform: rotate(15deg);
+  }
+}
+
+@keyframes paw-wave {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(25deg);
+  }
+  75% {
+    transform: rotate(-15deg);
+  }
+}
+
+@keyframes bounce-underline {
+  0%,
+  100% {
+    transform: scaleX(1) scaleY(1);
+  }
+  50% {
+    transform: scaleX(1.05) scaleY(1.5);
+  }
+}
+
+/* Font utility classes */
+.landing-page .font-display {
+  font-family: var(--font-display);
+}
+
+.landing-page .font-body {
+  font-family: var(--font-body);
+}
+
+/* Shadow glow utility */
+.landing-page .shadow-glow {
+  box-shadow: var(--shadow-glow);
+}
+
+/* Paw print pattern background */
+.landing-page .paw-pattern {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60' viewBox='0 0 60 60'%3E%3Cpath fill='%23f472b6' fill-opacity='0.1' d='M30 20c-2 0-3.5-1.5-3.5-3.5S28 13 30 13s3.5 1.5 3.5 3.5S32 20 30 20zm-8 5c-1.5 0-2.5-1-2.5-2.5S20.5 20 22 20s2.5 1 2.5 2.5S23.5 25 22 25zm16 0c-1.5 0-2.5-1-2.5-2.5S36.5 20 38 20s2.5 1 2.5 2.5S39.5 25 38 25zm-14 6c-1.5 0-2.5-1-2.5-2.5S22.5 26 24 26s2.5 1 2.5 2.5S25.5 31 24 31zm12 0c-1.5 0-2.5-1-2.5-2.5S34.5 26 36 26s2.5 1 2.5 2.5S37.5 31 36 31zm-6 8c-4 0-7-3-7-6.5s3-6.5 7-6.5 7 3 7 6.5-3 6.5-7 6.5z'/%3E%3C/svg%3E");
+}
+
+/* Bouncy link with animated underline */
+.landing-page .bouncy-link {
+  position: relative;
+  display: inline-block;
+}
+
+.landing-page .bouncy-link::after {
+  content: "";
+  position: absolute;
+  width: 100%;
+  height: 0.25rem;
+  background: var(--primary);
+  border-radius: 9999px;
+  bottom: 0;
+  left: 0;
+  transform: scaleX(0);
+  transition: transform 0.3s ease;
+  transform-origin: left;
+}
+
+.landing-page .bouncy-link:hover::after {
+  transform: scaleX(1);
+  animation: bounce-underline 0.4s ease-out;
+}
+
+/* Gradient text utilities */
+.landing-page .text-gradient-rainbow {
+  background: var(--gradient-rainbow);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.landing-page .text-gradient-sunset {
+  background: var(--gradient-sunset);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Gradient background utilities */
+.landing-page .bg-gradient-bubblegum {
+  background: var(--gradient-bubblegum);
+}
+
+.landing-page .bg-gradient-rainbow {
+  background: var(--gradient-rainbow);
+}
+
+.landing-page .bg-gradient-sunset {
+  background: var(--gradient-sunset);
+}
+
+/* Success color utilities */
+.landing-page .bg-success {
+  background-color: var(--success);
+}
+
+.landing-page .text-success {
+  color: var(--success);
+}
+
+.landing-page .border-success {
+  border-color: var(--success);
+}
+
+/* Gradient color stops for custom colors (Tailwind v4 doesn't auto-generate these) */
+
+/* Primary gradient stops */
+.landing-page .from-primary {
+  --tw-gradient-from: var(--primary);
+  --tw-gradient-to: transparent;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
+}
+
+.landing-page .to-primary {
+  --tw-gradient-to: var(--primary);
+}
+
+.landing-page .via-primary {
+  --tw-gradient-stops:
+    var(--tw-gradient-from), var(--primary), var(--tw-gradient-to);
+}
+
+/* Success gradient stops */
+.landing-page .from-success {
+  --tw-gradient-from: var(--success);
+  --tw-gradient-to: transparent;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
+}
+
+.landing-page .to-success {
+  --tw-gradient-to: var(--success);
+}
+
+.landing-page .via-success {
+  --tw-gradient-stops:
+    var(--tw-gradient-from), var(--success), var(--tw-gradient-to);
+}
+
+/* Accent gradient stops */
+.landing-page .from-accent {
+  --tw-gradient-from: var(--accent);
+  --tw-gradient-to: transparent;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
+}
+
+.landing-page .to-accent {
+  --tw-gradient-to: var(--accent);
+}
+
+.landing-page .via-accent {
+  --tw-gradient-stops:
+    var(--tw-gradient-from), var(--accent), var(--tw-gradient-to);
+}
+
+/* Smooth scroll behavior for landing pages */
+.landing-page {
+  scroll-behavior: smooth;
+}
+
+/* Base text styling for landing page body */
+/* .landing-page * {
+  border-color: hsl(340 30% 90% / 0.5);
+} */
+
+/* Container utility - centered with padding */
+.landing-page .container {
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 2rem;
+  padding-right: 2rem;
+}
+
+@media (min-width: 1400px) {
+  .landing-page .container {
+    max-width: 1400px;
+  }
+}
+
+/* Additional border radius utilities */
+.landing-page .rounded-xl {
+  border-radius: calc(var(--radius) + 8px);
+}
+
+.landing-page .rounded-2xl {
+  border-radius: calc(var(--radius) + 16px);
+}
+
+.landing-page .rounded-3xl {
+  border-radius: 2rem;
+}
+
+.landing-page .rounded-4xl {
+  border-radius: 3rem;
+}
+
+/* Inset glow shadow */
+.landing-page .shadow-inset-glow {
+  box-shadow: inset 0 2px 20px hsl(340 82% 52% / 0.1);
+}
+
+/* Additional animations */
+.landing-page .animate-fade-in {
+  animation: fade-in-landing 0.6s ease-out forwards;
+}
+
+.landing-page .animate-pop {
+  animation: pop 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+.landing-page .animate-heart-beat {
+  animation: heart-beat 1.5s ease-in-out infinite;
+}
+
+.landing-page .animate-jelly {
+  animation: jelly 0.5s ease-in-out;
+}
+
+.landing-page .animate-bounce-soft {
+  animation: bounce-soft 2s ease-in-out infinite;
+}
+
+.landing-page .animate-accordion-down {
+  animation: accordion-down 0.2s ease-out;
+}
+
+.landing-page .animate-accordion-up {
+  animation: accordion-up 0.2s ease-out;
+}
+
+/* Additional keyframes */
+@keyframes fade-in-landing {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pop {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes heart-beat {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  25% {
+    transform: scale(1.15);
+  }
+  50% {
+    transform: scale(1);
+  }
+  75% {
+    transform: scale(1.1);
+  }
+}
+
+@keyframes jelly {
+  0%,
+  100% {
+    transform: scale(1, 1);
+  }
+  25% {
+    transform: scale(0.95, 1.05);
+  }
+  50% {
+    transform: scale(1.05, 0.95);
+  }
+  75% {
+    transform: scale(0.98, 1.02);
+  }
+}
+
+@keyframes bounce-soft {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-12px);
+  }
+}
+
+@keyframes accordion-down {
+  from {
+    height: 0;
+  }
+  to {
+    height: var(--radix-accordion-content-height);
+  }
+}
+
+@keyframes accordion-up {
+  from {
+    height: var(--radix-accordion-content-height);
+  }
+  to {
+    height: 0;
+  }
+}

@@ -24,6 +24,24 @@ export default defineSchema({
       foreground: v.string(),   // Text color
       muted: v.string(),        // Subtle backgrounds/borders
     })),
+    // Email settings
+    emailSettings: v.optional(v.object({
+      senderName: v.string(),           // Display name for sender
+      replyTo: v.optional(v.string()),  // Reply-to email address
+      invitationSubject: v.optional(v.string()),    // Custom subject for invitations
+      confirmationSubject: v.optional(v.string()),  // Custom subject for confirmations
+    })),
+    // Event type and terminology
+    eventType: v.optional(v.string()),   // "networking", "wedding", "conference", "speed-dating", "corporate-mixer"
+    eventTypeSettings: v.optional(v.object({
+      guestLabel: v.string(),            // "Guest", "Attendee", "Participant", etc.
+      guestLabelPlural: v.string(),      // "Guests", "Attendees", "Participants", etc.
+      tableLabel: v.string(),            // "Table", "Station", "Group", etc.
+      tableLabelPlural: v.string(),      // "Tables", "Stations", "Groups", etc.
+      departmentLabel: v.string(),       // "Department", "Company", "Interest", etc.
+      departmentLabelPlural: v.string(), // "Departments", "Companies", "Interests", etc.
+      showRoundTimer: v.boolean(),       // Whether to show timer during rounds
+    })),
   }),
 
   guests: defineTable({
@@ -35,6 +53,29 @@ export default defineSchema({
     tableNumber: v.optional(v.number()),
     qrCodeId: v.optional(v.string()),
     checkedIn: v.boolean(),
+    // Dietary requirements
+    dietary: v.optional(v.object({
+      restrictions: v.array(v.string()),  // ["vegetarian", "nut-allergy", etc.]
+      notes: v.optional(v.string()),      // Free-text additional notes
+    })),
+    // Matching attributes for intelligent seating
+    attributes: v.optional(v.object({
+      interests: v.optional(v.array(v.string())),  // ["AI", "Marketing", "Finance", etc.]
+      jobLevel: v.optional(v.string()),            // "junior", "mid", "senior", "executive"
+      goals: v.optional(v.array(v.string())),      // ["find-mentor", "recruit", "learn", "network", "partner"]
+      customTags: v.optional(v.array(v.string())), // Custom tags for matching
+    })),
+    // Event-type specific attributes for seating
+    familyName: v.optional(v.string()),            // Family/last name for grouping (wedding)
+    side: v.optional(v.string()),                  // "bride" | "groom" | "both" (wedding)
+    company: v.optional(v.string()),               // Company name (corporate/networking)
+    team: v.optional(v.string()),                  // Team name (team building)
+    managementLevel: v.optional(v.string()),       // "ic" | "manager" | "director" | "exec"
+    isVip: v.optional(v.boolean()),                // VIP guest flag
+    // Email tracking
+    invitationSentAt: v.optional(v.string()),     // ISO timestamp
+    confirmationSentAt: v.optional(v.string()),   // ISO timestamp
+    emailUnsubscribed: v.optional(v.boolean()),   // Opt-out flag
   })
     .index("by_event", ["eventId"])
     .index("by_qrCodeId", ["qrCodeId"])
@@ -58,4 +99,82 @@ export default defineSchema({
     .index("by_guest", ["guestId"])
     .index("by_event_round", ["eventId", "roundNumber"])
     .index("by_event_guest", ["eventId", "guestId"]),
+
+  // Email delivery logs
+  emailLogs: defineTable({
+    eventId: v.id("events"),
+    guestId: v.optional(v.id("guests")),  // Optional - some emails may be event-wide
+    type: v.string(),                      // "invitation" | "checkin_confirmation" | "reminder"
+    status: v.string(),                    // "pending" | "sent" | "delivered" | "bounced" | "failed"
+    resendId: v.optional(v.string()),      // Resend message ID for tracking
+    sentAt: v.optional(v.string()),        // ISO timestamp when sent
+    deliveredAt: v.optional(v.string()),   // ISO timestamp when delivered
+    errorMessage: v.optional(v.string()),  // Error details if failed
+    recipientEmail: v.string(),            // Email address sent to
+  })
+    .index("by_event", ["eventId"])
+    .index("by_guest", ["guestId"])
+    .index("by_resend_id", ["resendId"])
+    .index("by_status", ["status"]),
+
+  // Email attachments (stored in Convex file storage)
+  emailAttachments: defineTable({
+    eventId: v.id("events"),
+    guestId: v.optional(v.id("guests")),   // null = event-wide attachment
+    filename: v.string(),                   // Original filename
+    storageId: v.id("_storage"),           // Convex file storage ID
+    contentType: v.string(),               // MIME type
+    size: v.number(),                      // File size in bytes
+    uploadedAt: v.string(),                // ISO timestamp
+  })
+    .index("by_event", ["eventId"])
+    .index("by_guest", ["guestId"]),
+
+  // Matching algorithm configuration per event
+  matchingConfig: defineTable({
+    eventId: v.id("events"),
+    // Seating configuration wizard (new approach)
+    seatingType: v.optional(v.string()),  // "wedding" | "corporate" | "networking" | "team" | "social" | "custom"
+    answers: v.optional(v.any()),          // JSON object storing question answers by question ID
+    vipTables: v.optional(v.array(v.number())),  // Table numbers designated for VIPs (configurable)
+    // Weight values range from -1 to 1 (derived from answers, hidden from user)
+    // Positive = encourage, Negative = discourage, 0 = ignore
+    weights: v.object({
+      departmentMix: v.number(),        // Mix people from different departments (default: 0.8)
+      interestAffinity: v.number(),     // Group people with similar interests (default: 0.3)
+      jobLevelDiversity: v.number(),    // Mix different job levels (default: 0.5)
+      goalCompatibility: v.number(),    // Match complementary goals (default: 0.4)
+      repeatAvoidance: v.number(),      // Avoid sitting with same people (default: 0.9)
+    }),
+    // Optional: custom interest categories for this event
+    interestOptions: v.optional(v.array(v.string())),
+    // Optional: custom goal options for this event
+    goalOptions: v.optional(v.array(v.string())),
+    updatedAt: v.string(),              // ISO timestamp
+  })
+    .index("by_event", ["eventId"]),
+
+  // Seating constraints for manual control (Enterprise Tooling)
+  seatingConstraints: defineTable({
+    eventId: v.id("events"),
+    type: v.string(),                      // "pin" | "repel" | "attract"
+    guestIds: v.array(v.id("guests")),     // Guest(s) involved in constraint
+    tableNumber: v.optional(v.number()),   // For "pin" constraints only
+    reason: v.optional(v.string()),        // Optional explanation
+    createdAt: v.string(),                 // ISO timestamp
+  })
+    .index("by_event", ["eventId"])
+    .index("by_guest", ["guestIds"]),
+
+  // Preview assignments for "Generate Preview" before committing
+  previewAssignments: defineTable({
+    eventId: v.id("events"),
+    sessionId: v.string(),                 // Unique session identifier
+    guestId: v.id("guests"),
+    roundNumber: v.number(),
+    tableNumber: v.number(),
+    createdAt: v.string(),                 // ISO timestamp
+  })
+    .index("by_session", ["sessionId"])
+    .index("by_event", ["eventId"]),
 })
