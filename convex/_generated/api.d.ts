@@ -18,6 +18,7 @@ import type * as matching from "../matching.js";
 import type * as matchingConfig from "../matchingConfig.js";
 import type * as preview from "../preview.js";
 import type * as tables from "../tables.js";
+import type * as themes from "../themes.js";
 
 import type {
   ApiFromModules,
@@ -36,6 +37,7 @@ declare const fullApi: ApiFromModules<{
   matchingConfig: typeof matchingConfig;
   preview: typeof preview;
   tables: typeof tables;
+  themes: typeof themes;
 }>;
 
 /**

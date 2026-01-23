@@ -2,6 +2,7 @@ import { v } from "convex/values"
 import { action, internalMutation, internalQuery, query } from "./_generated/server"
 import { internal } from "./_generated/api"
 import { Id } from "./_generated/dataModel"
+import { resolveThemeColors, getContrastColor, ThemeColors } from "./themes"
 
 // Email type constants
 export const EMAIL_TYPES = {
@@ -30,9 +31,22 @@ function replacePlaceholders(
     tableNumber?: number | string
     qrCodeUrl?: string
     roundAssignments?: { roundNumber: number; tableNumber: number }[]
+    theme?: ThemeColors
   }
 ): string {
   let result = template
+
+  // Get theme colors (or defaults)
+  const theme = data.theme || {
+    primary: "#6700D9",
+    secondary: "#F0F1FF",
+    accent: "#00F0D2",
+    background: "#FAFAFA",
+    foreground: "#1A1A2E",
+    muted: "#E5E5E5",
+  }
+  const primaryTextColor = getContrastColor(theme.primary)
+  const secondaryTextColor = getContrastColor(theme.secondary)
 
   // Handle conditional blocks first: {{#if qr_code_url}}...{{/if}}
   const conditionalRegex = /\{\{#if qr_code_url\}\}([\s\S]*?)\{\{\/if\}\}/g
@@ -50,31 +64,41 @@ function replacePlaceholders(
   result = result.replace(/\{\{table_number\}\}/g, String(data.tableNumber || "TBD"))
   result = result.replace(/\{\{qr_code_url\}\}/g, data.qrCodeUrl || "")
 
+  // Replace theme color placeholders
+  result = result.replace(/\{\{primary_color\}\}/g, theme.primary)
+  result = result.replace(/\{\{secondary_color\}\}/g, theme.secondary)
+  result = result.replace(/\{\{accent_color\}\}/g, theme.accent)
+  result = result.replace(/\{\{background_color\}\}/g, theme.background)
+  result = result.replace(/\{\{foreground_color\}\}/g, theme.foreground)
+  result = result.replace(/\{\{muted_color\}\}/g, theme.muted)
+  result = result.replace(/\{\{primary_text_color\}\}/g, primaryTextColor)
+  result = result.replace(/\{\{secondary_text_color\}\}/g, secondaryTextColor)
+
   // Handle round assignments if present (multi-round events)
   if (data.roundAssignments && data.roundAssignments.length > 1) {
-    // Build a visual table for multi-round events
+    // Build a visual table for multi-round events using theme colors
     const rows = data.roundAssignments
       .map((a, index) => {
         const isFirst = index === 0
-        const rowBg = isFirst ? "#f0f0ff" : "#fff"
-        const indicator = isFirst ? `<span style="color: #6700D9; font-weight: 500;"> ← Start here</span>` : ""
+        const rowBg = isFirst ? `${theme.primary}20` : "transparent"
+        const indicator = isFirst ? `<span style="color: ${theme.accent}; font-weight: 600;"> ← Start here</span>` : ""
         return `
           <tr style="background: ${rowBg};">
-            <td style="padding: 12px 16px; border-bottom: 1px solid #eee; font-weight: ${isFirst ? "600" : "400"};">Round ${a.roundNumber}</td>
-            <td style="padding: 12px 16px; border-bottom: 1px solid #eee; text-align: center; font-weight: ${isFirst ? "700" : "500"}; font-size: ${isFirst ? "18px" : "16px"};">Table ${a.tableNumber}${indicator}</td>
+            <td style="padding: 12px 16px; border-bottom: 1px solid ${theme.muted}40; color: ${secondaryTextColor}; font-weight: ${isFirst ? "600" : "400"};">Round ${a.roundNumber}</td>
+            <td style="padding: 12px 16px; border-bottom: 1px solid ${theme.muted}40; text-align: center; color: ${secondaryTextColor}; font-weight: ${isFirst ? "700" : "500"}; font-size: ${isFirst ? "18px" : "16px"};">Table ${a.tableNumber}${indicator}</td>
           </tr>`
       })
       .join("")
 
     const assignmentsHtml = `
-      <div style="margin: 24px 0;">
-        <p style="color: #333; font-weight: 600; margin-bottom: 8px;">This event has multiple rounds.</p>
-        <p style="color: #666; font-size: 14px; margin-bottom: 16px;">You'll switch tables between rounds to meet new people. Listen for announcements.</p>
-        <table style="width: 100%; border-collapse: collapse; border: 1px solid #eee; border-radius: 8px; overflow: hidden;">
+      <div style="margin: 24px 0; background: ${theme.secondary}; padding: 20px; border-radius: 12px;">
+        <p style="color: ${secondaryTextColor}; font-weight: 600; margin: 0 0 8px 0;">This event has multiple rounds.</p>
+        <p style="color: ${secondaryTextColor}; opacity: 0.8; font-size: 14px; margin: 0 0 16px 0;">You'll switch tables between rounds to meet new people. Listen for announcements.</p>
+        <table style="width: 100%; border-collapse: collapse;">
           <thead>
-            <tr style="background: #f9f9f9;">
-              <th style="padding: 10px 16px; text-align: left; font-size: 12px; text-transform: uppercase; color: #666; letter-spacing: 1px;">Round</th>
-              <th style="padding: 10px 16px; text-align: center; font-size: 12px; text-transform: uppercase; color: #666; letter-spacing: 1px;">Your Table</th>
+            <tr>
+              <th style="padding: 10px 16px; text-align: left; font-size: 12px; text-transform: uppercase; color: ${secondaryTextColor}; opacity: 0.6; letter-spacing: 1px; border-bottom: 2px solid ${theme.muted}40;">Round</th>
+              <th style="padding: 10px 16px; text-align: center; font-size: 12px; text-transform: uppercase; color: ${secondaryTextColor}; opacity: 0.6; letter-spacing: 1px; border-bottom: 2px solid ${theme.muted}40;">Your Table</th>
             </tr>
           </thead>
           <tbody>
@@ -98,31 +122,31 @@ const DEFAULT_TEMPLATES = {
   invitation: {
     subject: "You're Invited: {{event_name}}",
     html: `
-      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-        <h1 style="color: #333;">You're Invited!</h1>
-        <p>Hello {{guest_name}},</p>
-        <p>You're invited to <strong>{{event_name}}</strong>.</p>
-        <p>Scan the QR code below or click the link when you arrive to find your table assignment.</p>
+      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; background: {{background_color}}; padding: 32px; border-radius: 16px;">
+        <h1 style="color: {{foreground_color}}; margin-top: 0;">You're Invited!</h1>
+        <p style="color: {{foreground_color}};">Hello {{guest_name}},</p>
+        <p style="color: {{foreground_color}};">You're invited to <strong>{{event_name}}</strong>.</p>
+        <p style="color: {{foreground_color}};">Scan the QR code below or click the link when you arrive to find your table assignment.</p>
         {{#if qr_code_url}}
-        <p><a href="{{qr_code_url}}" style="color: #0066cc;">Find Your Table</a></p>
+        <p style="margin: 24px 0;"><a href="{{qr_code_url}}" style="display: inline-block; background: {{primary_color}}; color: {{primary_text_color}}; padding: 16px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px;">Find Your Table</a></p>
         {{/if}}
-        <p>We look forward to seeing you!</p>
+        <p style="color: {{foreground_color}}; opacity: 0.8;">We look forward to seeing you!</p>
       </div>
     `,
   },
   checkin_confirmation: {
     subject: "You're Checked In: {{event_name}}",
     html: `
-      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-        <h1 style="color: #333;">You're Checked In!</h1>
-        <p>Hello {{guest_name}},</p>
-        <p>You've successfully checked in to <strong>{{event_name}}</strong>.</p>
-        <div style="background: #6700D9; padding: 24px; border-radius: 12px; text-align: center; margin: 24px 0;">
-          <p style="margin: 0; color: rgba(255,255,255,0.8); font-size: 14px; text-transform: uppercase; letter-spacing: 2px;">Start at Table</p>
-          <p style="margin: 12px 0 0 0; font-size: 64px; font-weight: bold; color: #fff;">{{table_number}}</p>
+      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; background: {{background_color}}; padding: 32px; border-radius: 16px;">
+        <h1 style="color: {{foreground_color}}; margin-top: 0;">You're Checked In!</h1>
+        <p style="color: {{foreground_color}};">Hello {{guest_name}},</p>
+        <p style="color: {{foreground_color}};">You've successfully checked in to <strong>{{event_name}}</strong>.</p>
+        <div style="background: {{primary_color}}; padding: 24px; border-radius: 12px; text-align: center; margin: 24px 0;">
+          <p style="margin: 0; color: {{primary_text_color}}; opacity: 0.8; font-size: 14px; text-transform: uppercase; letter-spacing: 2px;">Start at Table</p>
+          <p style="margin: 12px 0 0 0; font-size: 64px; font-weight: bold; color: {{primary_text_color}};">{{table_number}}</p>
         </div>
         {{round_assignments}}
-        <p style="color: #666; margin-top: 24px;">Enjoy the event!</p>
+        <p style="color: {{foreground_color}}; opacity: 0.8; margin-top: 24px;">Enjoy the event!</p>
       </div>
     `,
   },
@@ -296,6 +320,9 @@ export const sendInvitation = action({
       ? `${args.baseUrl}/scan/${guest.qrCodeId}`
       : undefined
 
+    // Resolve theme colors
+    const theme = resolveThemeColors(event.themePreset, event.customColors as ThemeColors | undefined)
+
     // Get email settings
     const senderName = event.emailSettings?.senderName || "Seatherder"
     const senderEmail = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev"
@@ -305,12 +332,14 @@ export const sendInvitation = action({
         guestName: guest.name,
         eventName: event.name,
         qrCodeUrl,
+        theme,
       }
     )
     const html = replacePlaceholders(DEFAULT_TEMPLATES.invitation.html, {
       guestName: guest.name,
       eventName: event.name,
       qrCodeUrl,
+      theme,
     })
 
     // Prepare attachments (fetch from storage and convert to base64)
@@ -437,6 +466,9 @@ export const sendCheckInConfirmation = action({
     const senderName = event.emailSettings?.senderName || "Seatherder"
     const senderEmail = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev"
 
+    // Resolve theme colors
+    const theme = resolveThemeColors(event.themePreset, event.customColors as ThemeColors | undefined)
+
     // Determine table number to show
     const tableNumber = roundAssignments.length > 0
       ? roundAssignments[0].tableNumber
@@ -448,6 +480,7 @@ export const sendCheckInConfirmation = action({
         guestName: guest.name,
         eventName: event.name,
         tableNumber,
+        theme,
       }
     )
     const html = replacePlaceholders(DEFAULT_TEMPLATES.checkin_confirmation.html, {
@@ -458,6 +491,7 @@ export const sendCheckInConfirmation = action({
         roundNumber: a.roundNumber,
         tableNumber: a.tableNumber,
       })),
+      theme,
     })
 
     // Send via Resend
@@ -551,6 +585,10 @@ export const sendTestEmail = action({
     const senderName = event.emailSettings?.senderName || "Seatherder"
     const senderEmail = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev"
 
+    // Resolve theme colors
+    const theme = resolveThemeColors(event.themePreset, event.customColors as ThemeColors | undefined)
+    const primaryTextColor = getContrastColor(theme.primary)
+
     try {
       const response = await fetch("https://api.resend.com/emails", {
         method: "POST",
@@ -565,15 +603,19 @@ export const sendTestEmail = action({
           subject: `Test Email from ${event.name}`,
           html: `
             <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-              <h1 style="color: #333;">Test Email</h1>
+              <h1 style="color: ${theme.foreground};">Test Email</h1>
               <p>This is a test email from <strong>${event.name}</strong>.</p>
               <p>If you received this, your email configuration is working correctly.</p>
+              <div style="background: ${theme.primary}; padding: 20px; border-radius: 12px; text-align: center; margin: 24px 0;">
+                <p style="margin: 0; color: ${primaryTextColor}; font-size: 18px; font-weight: 600;">Your theme colors are working!</p>
+              </div>
               <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
               <p style="color: #666; font-size: 14px;">
                 <strong>Settings:</strong><br />
                 Sender: ${senderName}<br />
                 From: ${senderEmail}<br />
-                Reply-To: ${event.emailSettings?.replyTo || "(not set)"}
+                Reply-To: ${event.emailSettings?.replyTo || "(not set)"}<br />
+                Theme: ${event.themePreset || "default"}
               </p>
             </div>
           `,
@@ -674,6 +716,9 @@ export const sendBulkInvitations = action({
     const senderName = event.emailSettings?.senderName || "Seatherder"
     const senderEmail = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev"
 
+    // Resolve theme colors
+    const theme = resolveThemeColors(event.themePreset, event.customColors as ThemeColors | undefined)
+
     let sentCount = 0
     let failedCount = 0
     const errors: { guestId: string; email: string; error: string }[] = []
@@ -695,12 +740,14 @@ export const sendBulkInvitations = action({
               guestName: guest.name,
               eventName: event.name,
               qrCodeUrl,
+              theme,
             }
           )
           const html = replacePlaceholders(DEFAULT_TEMPLATES.invitation.html, {
             guestName: guest.name,
             eventName: event.name,
             qrCodeUrl,
+            theme,
           })
 
           const response = await fetch("https://api.resend.com/emails", {
