@@ -570,6 +570,7 @@ export default function EmailsPage({ params }: PageProps) {
                       size="lg"
                       variant="outline"
                       onClick={() => setShowTestEmailDialog(true)}
+                      disabled={!event?.emailSettings?.senderName}
                       className="gap-2"
                     >
                       <Send className="size-5" />

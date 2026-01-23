@@ -289,10 +289,19 @@ export const uncheckIn = mutation({
   },
 })
 
+// Resend rate limit: 2 emails/second, so stagger by 500ms each
+// Shared constant for email rate limiting
+const EMAIL_DELAY_MS = 500
+
 // Bulk check-in all guests for an event
 export const bulkCheckIn = mutation({
   args: { eventId: v.id("events") },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<{
+    total: number
+    checkedIn: number
+    alreadyCheckedIn: number
+    emailsScheduled: number
+  }> => {
     // Get all guests for this event
     const guests = await ctx.db
       .query("guests")
@@ -303,29 +312,40 @@ export const bulkCheckIn = mutation({
     let alreadyCheckedInCount = 0
     let emailsScheduledCount = 0
 
-    // Resend rate limit: 2 emails/second, so stagger by 500ms each
-    const EMAIL_DELAY_MS = 500
+    // Collect guests to check in and email
+    const guestsToCheckIn: typeof guests = []
+    const guestsToEmail: { guest: typeof guests[0]; delayIndex: number }[] = []
 
     for (const guest of guests) {
       if (guest.checkedIn) {
         alreadyCheckedInCount++
         continue
       }
+      guestsToCheckIn.push(guest)
 
-      // Update check-in status
-      await ctx.db.patch(guest._id, { checkedIn: true })
-      checkedInCount++
-
-      // Schedule confirmation email if guest has email and hasn't received one yet
-      // Stagger emails to respect Resend rate limit (2/second)
+      // Track guests who need confirmation emails
       if (guest.email && !guest.confirmationSentAt) {
-        const delay = emailsScheduledCount * EMAIL_DELAY_MS
-        await ctx.scheduler.runAfter(delay, api.email.sendCheckInConfirmation, {
-          guestId: guest._id,
-        })
+        guestsToEmail.push({ guest, delayIndex: emailsScheduledCount })
         emailsScheduledCount++
       }
     }
+
+    // Batch update check-in status for all guests
+    await Promise.all(
+      guestsToCheckIn.map(guest => ctx.db.patch(guest._id, { checkedIn: true }))
+    )
+    checkedInCount = guestsToCheckIn.length
+
+    // Schedule emails in parallel (non-blocking) with staggered delays
+    // Each scheduler.runAfter returns a promise that resolves immediately after scheduling
+    await Promise.all(
+      guestsToEmail.map(({ guest, delayIndex }) => {
+        const delay = delayIndex * EMAIL_DELAY_MS
+        return ctx.scheduler.runAfter(delay, api.email.sendCheckInConfirmation, {
+          guestId: guest._id,
+        })
+      })
+    )
 
     return {
       total: guests.length,

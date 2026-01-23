@@ -3,6 +3,33 @@ import { action, internalMutation, internalQuery, query } from "./_generated/ser
 import { internal } from "./_generated/api"
 import { Id } from "./_generated/dataModel"
 import { resolveThemeColors, getContrastColor, ThemeColors } from "./themes"
+import { Doc } from "./_generated/dataModel"
+
+/**
+ * Helper to resolve theme colors from an event document
+ * Centralizes the type assertion for customColors
+ */
+function getEventThemeColors(event: Doc<"events">): ThemeColors {
+  return resolveThemeColors(
+    event.themePreset,
+    event.customColors as ThemeColors | undefined
+  )
+}
+
+/**
+ * Escape HTML special characters to prevent XSS
+ * Used for user-provided content in email templates
+ */
+function escapeHtml(str: string): string {
+  const htmlEntities: Record<string, string> = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  }
+  return str.replace(/[&<>"']/g, (c) => htmlEntities[c] || c)
+}
 
 // Email type constants
 export const EMAIL_TYPES = {
@@ -197,8 +224,9 @@ export const getGuestsForBulkEmail = internalQuery({
       .collect()
 
     // Filter to only guests with email addresses who haven't unsubscribed
+    // Type guard ensures TypeScript knows email is defined
     const eligibleGuests = guests.filter(
-      (g) => g.email && !g.emailUnsubscribed
+      (g): g is typeof g & { email: string } => !!g.email && !g.emailUnsubscribed
     )
 
     // Get event-wide attachments
@@ -321,7 +349,7 @@ export const sendInvitation = action({
       : undefined
 
     // Resolve theme colors
-    const theme = resolveThemeColors(event.themePreset, event.customColors as ThemeColors | undefined)
+    const theme = getEventThemeColors(event)
 
     // Get email settings
     const senderName = event.emailSettings?.senderName || "Seatherder"
@@ -467,7 +495,7 @@ export const sendCheckInConfirmation = action({
     const senderEmail = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev"
 
     // Resolve theme colors
-    const theme = resolveThemeColors(event.themePreset, event.customColors as ThemeColors | undefined)
+    const theme = getEventThemeColors(event)
 
     // Determine table number to show
     const tableNumber = roundAssignments.length > 0
@@ -568,6 +596,12 @@ export const sendTestEmail = action({
     toEmail: v.string(),
   },
   handler: async (ctx, args): Promise<{ success: boolean; error?: string }> => {
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(args.toEmail)) {
+      return { success: false, error: "Invalid email address format" }
+    }
+
     const RESEND_API_KEY = process.env.RESEND_API_KEY
     if (!RESEND_API_KEY) {
       return { success: false, error: "RESEND_API_KEY is not configured" }
@@ -581,12 +615,15 @@ export const sendTestEmail = action({
       return { success: false, error: "Event not found" }
     }
 
-    // Email settings
+    // Email settings - escape user-provided values for HTML safety
     const senderName = event.emailSettings?.senderName || "Seatherder"
     const senderEmail = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev"
+    const escapedEventName = escapeHtml(event.name)
+    const escapedSenderName = escapeHtml(senderName)
+    const escapedReplyTo = escapeHtml(event.emailSettings?.replyTo || "(not set)")
 
     // Resolve theme colors
-    const theme = resolveThemeColors(event.themePreset, event.customColors as ThemeColors | undefined)
+    const theme = getEventThemeColors(event)
     const primaryTextColor = getContrastColor(theme.primary)
 
     try {
@@ -604,7 +641,7 @@ export const sendTestEmail = action({
           html: `
             <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
               <h1 style="color: ${theme.foreground};">Test Email</h1>
-              <p>This is a test email from <strong>${event.name}</strong>.</p>
+              <p>This is a test email from <strong>${escapedEventName}</strong>.</p>
               <p>If you received this, your email configuration is working correctly.</p>
               <div style="background: ${theme.primary}; padding: 20px; border-radius: 12px; text-align: center; margin: 24px 0;">
                 <p style="margin: 0; color: ${primaryTextColor}; font-size: 18px; font-weight: 600;">Your theme colors are working!</p>
@@ -612,9 +649,9 @@ export const sendTestEmail = action({
               <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
               <p style="color: #666; font-size: 14px;">
                 <strong>Settings:</strong><br />
-                Sender: ${senderName}<br />
+                Sender: ${escapedSenderName}<br />
                 From: ${senderEmail}<br />
-                Reply-To: ${event.emailSettings?.replyTo || "(not set)"}<br />
+                Reply-To: ${escapedReplyTo}<br />
                 Theme: ${event.themePreset || "default"}
               </p>
             </div>
@@ -652,8 +689,8 @@ export const sendBulkInvitations = action({
   args: {
     eventId: v.id("events"),
     baseUrl: v.string(),
-    batchSize: v.optional(v.number()), // Default 2 (Resend rate limit: 2/second)
-    delayMs: v.optional(v.number()),   // Default 1000ms between batches
+    batchSize: v.optional(v.number()), // Default 2: batch size of 2 with 1000ms delay = 2 emails/second (Resend rate limit)
+    delayMs: v.optional(v.number()),   // Default 1000ms between batches (for rate limiting)
   },
   handler: async (ctx, args): Promise<{
     success: boolean
@@ -717,7 +754,7 @@ export const sendBulkInvitations = action({
     const senderEmail = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev"
 
     // Resolve theme colors
-    const theme = resolveThemeColors(event.themePreset, event.customColors as ThemeColors | undefined)
+    const theme = getEventThemeColors(event)
 
     let sentCount = 0
     let failedCount = 0
@@ -778,7 +815,7 @@ export const sendBulkInvitations = action({
             guestId: guest._id,
             type: EMAIL_TYPES.INVITATION,
             status: EMAIL_STATUS.SENT,
-            recipientEmail: guest.email!,
+            recipientEmail: guest.email,
             resendId: result.id,
           })
 
@@ -806,7 +843,7 @@ export const sendBulkInvitations = action({
             : "Unknown error"
           errors.push({
             guestId: guest._id,
-            email: guest.email!,
+            email: guest.email,
             error: errorMessage,
           })
 
@@ -816,7 +853,7 @@ export const sendBulkInvitations = action({
             guestId: guest._id,
             type: EMAIL_TYPES.INVITATION,
             status: EMAIL_STATUS.FAILED,
-            recipientEmail: guest.email!,
+            recipientEmail: guest.email,
             errorMessage,
           })
         }

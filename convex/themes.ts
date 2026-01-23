@@ -1,6 +1,11 @@
 /**
  * Theme definitions for email templates
- * Mirrors the frontend theme-presets.ts for use in Convex actions
+ *
+ * NOTE: This file intentionally duplicates theme presets from src/lib/theme-presets.ts
+ * Convex serverless functions cannot import from the src/ directory, so we maintain
+ * a parallel copy here. When adding or modifying themes, update BOTH files.
+ *
+ * See: src/lib/theme-presets.ts (frontend)
  */
 
 export interface ThemeColors {

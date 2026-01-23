@@ -64,6 +64,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
@@ -1681,7 +1682,7 @@ export default function LiveEventPage({ params }: PageProps) {
               </div>
             )}
 
-            <div className="flex justify-end gap-3">
+            <DialogFooter>
               <Button
                 variant="outline"
                 onClick={() => {
@@ -1710,7 +1711,7 @@ export default function LiveEventPage({ params }: PageProps) {
                   )}
                 </Button>
               )}
-            </div>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </TooltipProvider>
