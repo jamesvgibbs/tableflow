@@ -1,7 +1,7 @@
 import { v } from "convex/values"
 import { mutation, query } from "./_generated/server"
 import { api } from "./_generated/api"
-import { Id } from "./_generated/dataModel"
+import type { Id } from "./_generated/dataModel"
 
 // Get all guests for an event
 export const getByEvent = query({
@@ -82,44 +82,71 @@ export const getAllRoundAssignmentsByEvent = query({
   },
 })
 
-// Search guests by name across all events (includes round assignments)
+// Search guests by name (includes round assignments)
+// When eventId is provided, scopes search to that event (recommended for security)
+// When not provided, searches cross-event but limits results to prevent memory issues
 export const searchByName = query({
-  args: { query: v.string() },
+  args: {
+    query: v.string(),
+    eventId: v.optional(v.id("events")), // Optional - cross-event search for check-in kiosk
+  },
   handler: async (ctx, args) => {
+    // TODO: Add proper authentication when moving to production
     if (!args.query.trim()) return []
 
     const queryLower = args.query.toLowerCase()
 
-    // Get all guests and filter by name
-    const allGuests = await ctx.db.query("guests").collect()
+    // Get guests - scoped by event when provided (recommended), limited otherwise
+    let allGuests
+    const eventId = args.eventId
+    if (eventId) {
+      // Scoped search - uses index for efficiency and security
+      allGuests = await ctx.db
+        .query("guests")
+        .withIndex("by_event", (q) => q.eq("eventId", eventId))
+        .collect()
+    } else {
+      // Cross-event search for check-in kiosk - limit to prevent memory exhaustion
+      // TODO: Require authentication for cross-event search when moving to production
+      allGuests = await ctx.db.query("guests").take(1000)
+    }
 
+    // Filter matching guests and limit to assigned guests only
     const matchingGuests = allGuests.filter(
       (guest) =>
-        guest.name.toLowerCase().includes(queryLower) ||
-        guest.department?.toLowerCase().includes(queryLower)
+        guest.tableNumber !== undefined &&
+        (guest.name.toLowerCase().includes(queryLower) ||
+          guest.department?.toLowerCase().includes(queryLower))
     )
 
-    // Get event details and round assignments for each matching guest
-    const results = await Promise.all(
-      matchingGuests.map(async (guest) => {
-        const event = await ctx.db.get(guest.eventId)
+    // Batch fetch events to avoid N+1 queries
+    const uniqueEventIds = [...new Set(matchingGuests.map((g) => g.eventId))]
+    const events = await Promise.all(uniqueEventIds.map((id) => ctx.db.get(id)))
+    const eventMap = new Map(
+      events.filter((e): e is NonNullable<typeof e> => e !== null).map((e) => [e._id, e])
+    )
 
-        // Get round assignments
-        const roundAssignments = await ctx.db
+    // Batch fetch all round assignments for matching guests
+    const allAssignments = await Promise.all(
+      matchingGuests.map((guest) =>
+        ctx.db
           .query("guestRoundAssignments")
           .withIndex("by_guest", (q) => q.eq("guestId", guest._id))
           .collect()
-
-        roundAssignments.sort((a, b) => a.roundNumber - b.roundNumber)
-
-        return { guest, event, roundAssignments }
-      })
+      )
     )
 
-    // Filter out results where event is null and only include assigned guests
-    return results.filter(
-      (r) => r.event !== null && r.guest.tableNumber !== undefined
-    )
+    // Build results with pre-fetched data
+    const results = matchingGuests.map((guest, index) => {
+      const event = eventMap.get(guest.eventId)
+      const roundAssignments = allAssignments[index].sort(
+        (a, b) => a.roundNumber - b.roundNumber
+      )
+      return { guest, event: event || null, roundAssignments }
+    })
+
+    // Filter out results where event is null
+    return results.filter((r) => r.event !== null)
   },
 })
 
@@ -231,6 +258,10 @@ export const createMany = mutation({
 export const remove = mutation({
   args: { id: v.id("guests") },
   handler: async (ctx, args) => {
+    const guest = await ctx.db.get(args.id)
+    if (!guest) {
+      throw new Error("Guest not found")
+    }
     await ctx.db.delete(args.id)
   },
 })
@@ -265,10 +296,9 @@ export const checkIn = mutation({
     // Update check-in status
     await ctx.db.patch(args.id, { checkedIn: true })
 
-    // Schedule confirmation email if guest has email and hasn't received one yet
-    // The action will handle checking for unsubscribed status and API configuration
-    if (guest.email && !guest.confirmationSentAt) {
-      // Schedule the action to run immediately (0ms delay)
+    // Enqueue confirmation email if guest has email and hasn't received one yet
+    // The email queue handles rate limiting and retries automatically
+    if (guest.email && !guest.confirmationSentAt && !guest.emailUnsubscribed) {
       await ctx.scheduler.runAfter(0, api.email.sendCheckInConfirmation, {
         guestId: args.id,
       })
@@ -289,10 +319,6 @@ export const uncheckIn = mutation({
   },
 })
 
-// Resend rate limit: 2 emails/second, so stagger by 500ms each
-// Shared constant for email rate limiting
-const EMAIL_DELAY_MS = 500
-
 // Bulk check-in all guests for an event
 export const bulkCheckIn = mutation({
   args: { eventId: v.id("events") },
@@ -300,8 +326,15 @@ export const bulkCheckIn = mutation({
     total: number
     checkedIn: number
     alreadyCheckedIn: number
-    emailsScheduled: number
+    emailsQueued: number
   }> => {
+    // TODO: Add proper authentication when moving to production (requires Clerk integration)
+    // Verify event exists before proceeding
+    const event = await ctx.db.get(args.eventId)
+    if (!event) {
+      throw new Error("Event not found")
+    }
+
     // Get all guests for this event
     const guests = await ctx.db
       .query("guests")
@@ -310,11 +343,10 @@ export const bulkCheckIn = mutation({
 
     let checkedInCount = 0
     let alreadyCheckedInCount = 0
-    let emailsScheduledCount = 0
+    let emailsQueuedCount = 0
 
-    // Collect guests to check in and email
+    // Collect guests to check in
     const guestsToCheckIn: typeof guests = []
-    const guestsToEmail: { guest: typeof guests[0]; delayIndex: number }[] = []
 
     for (const guest of guests) {
       if (guest.checkedIn) {
@@ -322,12 +354,6 @@ export const bulkCheckIn = mutation({
         continue
       }
       guestsToCheckIn.push(guest)
-
-      // Track guests who need confirmation emails
-      if (guest.email && !guest.confirmationSentAt) {
-        guestsToEmail.push({ guest, delayIndex: emailsScheduledCount })
-        emailsScheduledCount++
-      }
     }
 
     // Batch update check-in status for all guests
@@ -336,22 +362,22 @@ export const bulkCheckIn = mutation({
     )
     checkedInCount = guestsToCheckIn.length
 
-    // Schedule emails in parallel (non-blocking) with staggered delays
-    // Each scheduler.runAfter returns a promise that resolves immediately after scheduling
-    await Promise.all(
-      guestsToEmail.map(({ guest, delayIndex }) => {
-        const delay = delayIndex * EMAIL_DELAY_MS
-        return ctx.scheduler.runAfter(delay, api.email.sendCheckInConfirmation, {
+    // Enqueue confirmation emails for guests who need them
+    // The email queue handles rate limiting automatically
+    for (const guest of guestsToCheckIn) {
+      if (guest.email && !guest.confirmationSentAt && !guest.emailUnsubscribed) {
+        await ctx.scheduler.runAfter(0, api.email.sendCheckInConfirmation, {
           guestId: guest._id,
         })
-      })
-    )
+        emailsQueuedCount++
+      }
+    }
 
     return {
       total: guests.length,
       checkedIn: checkedInCount,
       alreadyCheckedIn: alreadyCheckedInCount,
-      emailsScheduled: emailsScheduledCount,
+      emailsQueued: emailsQueuedCount,
     }
   },
 })

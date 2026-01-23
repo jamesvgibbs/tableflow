@@ -11,6 +11,7 @@
 import type * as attachments from "../attachments.js";
 import type * as constraints from "../constraints.js";
 import type * as email from "../email.js";
+import type * as emailQueue from "../emailQueue.js";
 import type * as events from "../events.js";
 import type * as guests from "../guests.js";
 import type * as http from "../http.js";
@@ -30,6 +31,7 @@ declare const fullApi: ApiFromModules<{
   attachments: typeof attachments;
   constraints: typeof constraints;
   email: typeof email;
+  emailQueue: typeof emailQueue;
   events: typeof events;
   guests: typeof guests;
   http: typeof http;

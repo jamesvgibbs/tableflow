@@ -128,14 +128,15 @@ export default defineSchema({
     uploadedAt: v.string(),                // ISO timestamp
   })
     .index("by_event", ["eventId"])
-    .index("by_guest", ["guestId"]),
+    .index("by_guest", ["guestId"])
+    .index("by_event_guest", ["eventId", "guestId"]),
 
   // Matching algorithm configuration per event
   matchingConfig: defineTable({
     eventId: v.id("events"),
     // Seating configuration wizard (new approach)
     seatingType: v.optional(v.string()),  // "wedding" | "corporate" | "networking" | "team" | "social" | "custom"
-    answers: v.optional(v.any()),          // JSON object storing question answers by question ID
+    answers: v.optional(v.record(v.string(), v.string())),  // Question ID -> answer mapping
     vipTables: v.optional(v.array(v.number())),  // Table numbers designated for VIPs (configurable)
     // Weight values range from -1 to 1 (derived from answers, hidden from user)
     // Positive = encourage, Negative = discourage, 0 = ignore
@@ -177,4 +178,32 @@ export default defineSchema({
   })
     .index("by_session", ["sessionId"])
     .index("by_event", ["eventId"]),
+
+  // Email queue for rate-limited sending (2 emails/second on Resend free tier)
+  emailQueue: defineTable({
+    eventId: v.id("events"),
+    guestId: v.id("guests"),
+    type: v.string(),                      // "invitation" | "checkin_confirmation"
+    priority: v.number(),                  // 1 = high (check-in), 10 = low (bulk)
+    status: v.string(),                    // "pending" | "processing" | "sent" | "failed"
+    attempts: v.number(),                  // Current attempt count
+    maxAttempts: v.number(),               // Default 3
+    nextAttemptAt: v.number(),             // Timestamp for retry backoff
+    templateData: v.object({               // Data needed to send
+      baseUrl: v.optional(v.string()),
+    }),
+    errorMessage: v.optional(v.string()),
+    resendId: v.optional(v.string()),
+    createdAt: v.number(),
+    processedAt: v.optional(v.number()),
+  })
+    .index("by_status_priority", ["status", "priority", "nextAttemptAt"])
+    .index("by_event", ["eventId"])
+    .index("by_guest", ["guestId"]),
+
+  // Singleton to track email processor state
+  emailQueueStatus: defineTable({
+    isProcessing: v.boolean(),
+    lastProcessedAt: v.optional(v.number()),
+  }),
 })

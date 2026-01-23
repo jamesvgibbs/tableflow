@@ -1,19 +1,36 @@
 import { v } from "convex/values"
-import { action, internalMutation, internalQuery, query } from "./_generated/server"
+import { action, internalAction, internalMutation, internalQuery, mutation, query } from "./_generated/server"
 import { internal } from "./_generated/api"
-import { Id } from "./_generated/dataModel"
-import { resolveThemeColors, getContrastColor, ThemeColors } from "./themes"
-import { Doc } from "./_generated/dataModel"
+import type { Id, Doc } from "./_generated/dataModel"
+import { resolveThemeColors, getContrastColor } from "./themes"
+import type { ThemeColors } from "./themes"
+import { EMAIL_PRIORITY } from "./emailQueue"
+
+/**
+ * Type guard to validate customColors has the expected shape
+ */
+function isValidThemeColors(obj: unknown): obj is ThemeColors {
+  if (!obj || typeof obj !== "object") return false
+  const colors = obj as Record<string, unknown>
+  return (
+    typeof colors.primary === "string" &&
+    typeof colors.secondary === "string" &&
+    typeof colors.accent === "string" &&
+    typeof colors.background === "string" &&
+    typeof colors.foreground === "string" &&
+    typeof colors.muted === "string"
+  )
+}
 
 /**
  * Helper to resolve theme colors from an event document
- * Centralizes the type assertion for customColors
+ * Validates customColors shape at runtime for type safety
  */
 function getEventThemeColors(event: Doc<"events">): ThemeColors {
-  return resolveThemeColors(
-    event.themePreset,
-    event.customColors as ThemeColors | undefined
-  )
+  const customColors = isValidThemeColors(event.customColors)
+    ? event.customColors
+    : undefined
+  return resolveThemeColors(event.themePreset, customColors)
 }
 
 /**
@@ -85,21 +102,27 @@ function replacePlaceholders(
     result = result.replace(conditionalRegex, "")
   }
 
-  // Replace simple placeholders
-  result = result.replace(/\{\{guest_name\}\}/g, data.guestName)
-  result = result.replace(/\{\{event_name\}\}/g, data.eventName)
-  result = result.replace(/\{\{table_number\}\}/g, String(data.tableNumber || "TBD"))
-  result = result.replace(/\{\{qr_code_url\}\}/g, data.qrCodeUrl || "")
+  // Build replacement map for single-pass replacement (more efficient at scale)
+  const replacements: Record<string, string> = {
+    // User content (escaped for XSS prevention)
+    "{{guest_name}}": escapeHtml(data.guestName),
+    "{{event_name}}": escapeHtml(data.eventName),
+    "{{table_number}}": String(data.tableNumber || "TBD"),
+    "{{qr_code_url}}": data.qrCodeUrl || "",
+    // Theme colors
+    "{{primary_color}}": theme.primary,
+    "{{secondary_color}}": theme.secondary,
+    "{{accent_color}}": theme.accent,
+    "{{background_color}}": theme.background,
+    "{{foreground_color}}": theme.foreground,
+    "{{muted_color}}": theme.muted,
+    "{{primary_text_color}}": primaryTextColor,
+    "{{secondary_text_color}}": secondaryTextColor,
+  }
 
-  // Replace theme color placeholders
-  result = result.replace(/\{\{primary_color\}\}/g, theme.primary)
-  result = result.replace(/\{\{secondary_color\}\}/g, theme.secondary)
-  result = result.replace(/\{\{accent_color\}\}/g, theme.accent)
-  result = result.replace(/\{\{background_color\}\}/g, theme.background)
-  result = result.replace(/\{\{foreground_color\}\}/g, theme.foreground)
-  result = result.replace(/\{\{muted_color\}\}/g, theme.muted)
-  result = result.replace(/\{\{primary_text_color\}\}/g, primaryTextColor)
-  result = result.replace(/\{\{secondary_text_color\}\}/g, secondaryTextColor)
+  // Single-pass replacement using pattern matching
+  const placeholderPattern = /\{\{(?:guest_name|event_name|table_number|qr_code_url|primary_color|secondary_color|accent_color|background_color|foreground_color|muted_color|primary_text_color|secondary_text_color)\}\}/g
+  result = result.replace(placeholderPattern, (match) => replacements[match] ?? match)
 
   // Handle round assignments if present (multi-round events)
   if (data.roundAssignments && data.roundAssignments.length > 1) {
@@ -312,28 +335,19 @@ export const updateEmailLogStatus = internalMutation({
 })
 
 /**
- * Send invitation email to a single guest
+ * Send invitation email to a single guest (via queue)
+ * This enqueues the email for rate-limited sending
  */
-export const sendInvitation = action({
+export const sendInvitation = mutation({
   args: {
     guestId: v.id("guests"),
-    baseUrl: v.string(), // Frontend URL for QR code links
+    baseUrl: v.string(),
   },
-  handler: async (ctx, args): Promise<{ success: boolean; resendId: string }> => {
-    const RESEND_API_KEY = process.env.RESEND_API_KEY
-    if (!RESEND_API_KEY) {
-      throw new Error("RESEND_API_KEY is not configured")
-    }
-
-    // Get guest data
-    const data = await ctx.runQuery(internal.email.getGuestForEmail, {
-      guestId: args.guestId,
-    })
-    if (!data) {
+  handler: async (ctx, args) => {
+    const guest = await ctx.db.get(args.guestId)
+    if (!guest) {
       throw new Error("Guest not found")
     }
-
-    const { guest, event } = data
 
     if (!guest.email) {
       throw new Error("Guest has no email address")
@@ -341,6 +355,59 @@ export const sendInvitation = action({
 
     if (guest.emailUnsubscribed) {
       throw new Error("Guest has unsubscribed from emails")
+    }
+
+    // Enqueue the email
+    await ctx.db.insert("emailQueue", {
+      eventId: guest.eventId,
+      guestId: args.guestId,
+      type: EMAIL_TYPES.INVITATION,
+      priority: EMAIL_PRIORITY.INVITATION,
+      status: "pending",
+      attempts: 0,
+      maxAttempts: 3,
+      nextAttemptAt: Date.now(),
+      templateData: { baseUrl: args.baseUrl },
+      createdAt: Date.now(),
+    })
+
+    // Start the processor if not already running
+    await ctx.scheduler.runAfter(0, internal.emailQueue.maybeStartProcessor, {})
+
+    return { queued: true }
+  },
+})
+
+/**
+ * Internal action to send invitation email directly (called by queue processor)
+ */
+export const sendInvitationDirect = internalAction({
+  args: {
+    guestId: v.id("guests"),
+    baseUrl: v.string(),
+  },
+  handler: async (ctx, args): Promise<{ success: boolean; resendId?: string; error?: string }> => {
+    const RESEND_API_KEY = process.env.RESEND_API_KEY
+    if (!RESEND_API_KEY) {
+      return { success: false, error: "RESEND_API_KEY is not configured" }
+    }
+
+    // Get guest data
+    const data = await ctx.runQuery(internal.email.getGuestForEmail, {
+      guestId: args.guestId,
+    })
+    if (!data) {
+      return { success: false, error: "Guest not found" }
+    }
+
+    const { guest, event } = data
+
+    if (!guest.email) {
+      return { success: false, error: "Guest has no email address" }
+    }
+
+    if (guest.emailUnsubscribed) {
+      return { success: false, error: "Guest has unsubscribed from emails" }
     }
 
     // Build QR code URL
@@ -419,7 +486,7 @@ export const sendInvitation = action({
           recipientEmail: guest.email,
           errorMessage: result.message || "Unknown error",
         })
-        throw new Error(result.message || "Failed to send email")
+        return { success: false, error: result.message || "Failed to send email" }
       }
 
       // Log success
@@ -452,24 +519,66 @@ export const sendInvitation = action({
         errorMessage,
       })
 
-      throw error
+      return { success: false, error: errorMessage }
     }
   },
 })
 
 /**
- * Send check-in confirmation email
+ * Send check-in confirmation email (via queue)
+ * This enqueues the email with high priority for rate-limited sending
  */
-export const sendCheckInConfirmation = action({
+export const sendCheckInConfirmation = mutation({
   args: {
     guestId: v.id("guests"),
   },
-  handler: async (ctx, args): Promise<{ success: boolean; reason?: string; resendId?: string; error?: string }> => {
+  handler: async (ctx, args) => {
+    const guest = await ctx.db.get(args.guestId)
+    if (!guest) {
+      return { queued: false, reason: "guest_not_found" }
+    }
+
+    if (!guest.email) {
+      return { queued: false, reason: "no_email" }
+    }
+
+    if (guest.emailUnsubscribed) {
+      return { queued: false, reason: "unsubscribed" }
+    }
+
+    // Enqueue with high priority (check-in confirmations are urgent)
+    await ctx.db.insert("emailQueue", {
+      eventId: guest.eventId,
+      guestId: args.guestId,
+      type: EMAIL_TYPES.CHECKIN_CONFIRMATION,
+      priority: EMAIL_PRIORITY.CHECKIN_CONFIRMATION,
+      status: "pending",
+      attempts: 0,
+      maxAttempts: 3,
+      nextAttemptAt: Date.now(),
+      templateData: {},
+      createdAt: Date.now(),
+    })
+
+    // Start the processor if not already running
+    await ctx.scheduler.runAfter(0, internal.emailQueue.maybeStartProcessor, {})
+
+    return { queued: true }
+  },
+})
+
+/**
+ * Internal action to send check-in confirmation directly (called by queue processor)
+ */
+export const sendCheckInConfirmationDirect = internalAction({
+  args: {
+    guestId: v.id("guests"),
+  },
+  handler: async (ctx, args): Promise<{ success: boolean; resendId?: string; error?: string }> => {
     const RESEND_API_KEY = process.env.RESEND_API_KEY
     if (!RESEND_API_KEY) {
-      // Silently skip if not configured (common during development)
       console.log("RESEND_API_KEY not configured, skipping confirmation email")
-      return { success: false, reason: "not_configured" }
+      return { success: false, error: "RESEND_API_KEY not configured" }
     }
 
     // Get guest data
@@ -477,17 +586,17 @@ export const sendCheckInConfirmation = action({
       guestId: args.guestId,
     })
     if (!data) {
-      return { success: false, reason: "guest_not_found" }
+      return { success: false, error: "Guest not found" }
     }
 
     const { guest, event, roundAssignments } = data
 
     if (!guest.email) {
-      return { success: false, reason: "no_email" }
+      return { success: false, error: "Guest has no email address" }
     }
 
     if (guest.emailUnsubscribed) {
-      return { success: false, reason: "unsubscribed" }
+      return { success: false, error: "Guest has unsubscribed" }
     }
 
     // Get email settings
@@ -550,7 +659,7 @@ export const sendCheckInConfirmation = action({
           recipientEmail: guest.email,
           errorMessage: result.message || "Unknown error",
         })
-        return { success: false, reason: "send_failed", error: result.message }
+        return { success: false, error: result.message || "Failed to send" }
       }
 
       // Log success
@@ -582,7 +691,7 @@ export const sendCheckInConfirmation = action({
         errorMessage,
       })
 
-      return { success: false, reason: "exception", error: errorMessage }
+      return { success: false, error: errorMessage }
     }
   },
 })
@@ -596,8 +705,11 @@ export const sendTestEmail = action({
     toEmail: v.string(),
   },
   handler: async (ctx, args): Promise<{ success: boolean; error?: string }> => {
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    // TODO: Add proper authentication when moving to production (requires Clerk integration)
+    // For now, verify the event exists before proceeding
+
+    // Validate email format with stricter RFC 5322 simplified pattern
+    const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/
     if (!emailRegex.test(args.toEmail)) {
       return { success: false, error: "Invalid email address format" }
     }
@@ -607,7 +719,7 @@ export const sendTestEmail = action({
       return { success: false, error: "RESEND_API_KEY is not configured" }
     }
 
-    // Get event for settings
+    // Get event for settings (also serves as basic authorization - event must exist)
     const event = await ctx.runQuery(internal.email.getEventForTestEmail, {
       eventId: args.eventId,
     })
@@ -682,195 +794,73 @@ export const getEventForTestEmail = internalQuery({
 })
 
 /**
- * Send bulk invitation emails to all guests in an event
- * Uses batching with delays to respect rate limits
+ * Send bulk invitation emails to all guests in an event (via queue)
+ * Enqueues all emails for rate-limited sending
  */
-export const sendBulkInvitations = action({
+export const sendBulkInvitations = mutation({
   args: {
     eventId: v.id("events"),
     baseUrl: v.string(),
-    batchSize: v.optional(v.number()), // Default 2: batch size of 2 with 1000ms delay = 2 emails/second (Resend rate limit)
-    delayMs: v.optional(v.number()),   // Default 1000ms between batches (for rate limiting)
   },
   handler: async (ctx, args): Promise<{
     success: boolean
-    sent: number
-    failed: number
+    queued: number
     skipped: number
     message?: string
-    errors?: { guestId: string; email: string; error: string }[]
   }> => {
-    const RESEND_API_KEY = process.env.RESEND_API_KEY
-    if (!RESEND_API_KEY) {
-      throw new Error("RESEND_API_KEY is not configured")
+    // TODO: Add proper authentication when moving to production (requires Clerk integration)
+    // For now, verify the event exists before proceeding
+    const event = await ctx.db.get(args.eventId)
+    if (!event) {
+      return { success: false, queued: 0, skipped: 0, message: "Event not found" }
     }
 
-    const data = await ctx.runQuery(internal.email.getGuestsForBulkEmail, {
-      eventId: args.eventId,
-    })
-    if (!data) {
-      throw new Error("Event not found")
-    }
+    // Get all guests for this event
+    const guests = await ctx.db
+      .query("guests")
+      .withIndex("by_event", (q) => q.eq("eventId", args.eventId))
+      .collect()
 
-    const { event, guests, attachments } = data
-    // Resend rate limit: 2 emails/second
-    const batchSize = args.batchSize || 2
-    const delayMs = args.delayMs || 1000
+    // Filter to guests with emails who haven't unsubscribed
+    const eligibleGuests = guests.filter((g) => g.email && !g.emailUnsubscribed)
 
     // Filter guests who haven't received invitations yet
-    const guestsToEmail = guests.filter((g) => !g.invitationSentAt)
+    const guestsToEmail = eligibleGuests.filter((g) => !g.invitationSentAt)
 
     if (guestsToEmail.length === 0) {
       return {
         success: true,
-        sent: 0,
-        failed: 0,
-        skipped: guests.length,
+        queued: 0,
+        skipped: eligibleGuests.length,
         message: "All eligible guests have already received invitations"
       }
     }
 
-    // Prepare attachments once
-    const emailAttachments: { filename: string; content: string }[] = []
-    for (const attachment of attachments) {
-      const url = await ctx.storage.getUrl(attachment.storageId)
-      if (url) {
-        try {
-          const response = await fetch(url)
-          const arrayBuffer = await response.arrayBuffer()
-          const base64 = Buffer.from(arrayBuffer).toString("base64")
-          emailAttachments.push({
-            filename: attachment.filename,
-            content: base64,
-          })
-        } catch (e) {
-          console.error(`Failed to fetch attachment ${attachment.filename}:`, e)
-        }
-      }
+    const now = Date.now()
+
+    // Enqueue all emails
+    for (const guest of guestsToEmail) {
+      await ctx.db.insert("emailQueue", {
+        eventId: args.eventId,
+        guestId: guest._id,
+        type: EMAIL_TYPES.INVITATION,
+        priority: EMAIL_PRIORITY.INVITATION,
+        status: "pending",
+        attempts: 0,
+        maxAttempts: 3,
+        nextAttemptAt: now,
+        templateData: { baseUrl: args.baseUrl },
+        createdAt: now,
+      })
     }
 
-    // Get email settings
-    const senderName = event.emailSettings?.senderName || "Seatherder"
-    const senderEmail = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev"
-
-    // Resolve theme colors
-    const theme = getEventThemeColors(event)
-
-    let sentCount = 0
-    let failedCount = 0
-    const errors: { guestId: string; email: string; error: string }[] = []
-
-    // Process in batches
-    for (let i = 0; i < guestsToEmail.length; i += batchSize) {
-      const batch = guestsToEmail.slice(i, i + batchSize)
-
-      // Process batch concurrently
-      const results = await Promise.allSettled(
-        batch.map(async (guest) => {
-          const qrCodeUrl = guest.qrCodeId
-            ? `${args.baseUrl}/scan/${guest.qrCodeId}`
-            : undefined
-
-          const subject = replacePlaceholders(
-            event.emailSettings?.invitationSubject || DEFAULT_TEMPLATES.invitation.subject,
-            {
-              guestName: guest.name,
-              eventName: event.name,
-              qrCodeUrl,
-              theme,
-            }
-          )
-          const html = replacePlaceholders(DEFAULT_TEMPLATES.invitation.html, {
-            guestName: guest.name,
-            eventName: event.name,
-            qrCodeUrl,
-            theme,
-          })
-
-          const response = await fetch("https://api.resend.com/emails", {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${RESEND_API_KEY}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              from: `${senderName} <${senderEmail}>`,
-              to: guest.email,
-              reply_to: event.emailSettings?.replyTo,
-              subject,
-              html,
-              attachments: emailAttachments.length > 0 ? emailAttachments : undefined,
-            }),
-          })
-
-          const result = await response.json()
-
-          if (!response.ok) {
-            throw new Error(result.message || "Failed to send")
-          }
-
-          // Log success
-          await ctx.runMutation(internal.email.logEmail, {
-            eventId: event._id,
-            guestId: guest._id,
-            type: EMAIL_TYPES.INVITATION,
-            status: EMAIL_STATUS.SENT,
-            recipientEmail: guest.email,
-            resendId: result.id,
-          })
-
-          // Update guest timestamp
-          await ctx.runMutation(internal.email.updateGuestEmailTimestamp, {
-            guestId: guest._id,
-            field: "invitationSentAt",
-          })
-
-          return { guestId: guest._id, resendId: result.id }
-        })
-      )
-
-      // Process results
-      for (let j = 0; j < results.length; j++) {
-        const result = results[j]
-        const guest = batch[j]
-
-        if (result.status === "fulfilled") {
-          sentCount++
-        } else {
-          failedCount++
-          const errorMessage = result.reason instanceof Error
-            ? result.reason.message
-            : "Unknown error"
-          errors.push({
-            guestId: guest._id,
-            email: guest.email,
-            error: errorMessage,
-          })
-
-          // Log failure
-          await ctx.runMutation(internal.email.logEmail, {
-            eventId: event._id,
-            guestId: guest._id,
-            type: EMAIL_TYPES.INVITATION,
-            status: EMAIL_STATUS.FAILED,
-            recipientEmail: guest.email,
-            errorMessage,
-          })
-        }
-      }
-
-      // Delay before next batch (except for last batch)
-      if (i + batchSize < guestsToEmail.length) {
-        await new Promise((resolve) => setTimeout(resolve, delayMs))
-      }
-    }
+    // Start the processor if not already running
+    await ctx.scheduler.runAfter(0, internal.emailQueue.maybeStartProcessor, {})
 
     return {
-      success: failedCount === 0,
-      sent: sentCount,
-      failed: failedCount,
-      skipped: guests.length - guestsToEmail.length,
-      errors: errors.length > 0 ? errors : undefined,
+      success: true,
+      queued: guestsToEmail.length,
+      skipped: eligibleGuests.length - guestsToEmail.length,
     }
   },
 })
@@ -887,6 +877,8 @@ export const getEmailLogsByEvent = query({
     eventId: v.id("events"),
   },
   handler: async (ctx, args) => {
+    // TODO: Add proper authentication when moving to production (requires Clerk integration)
+    // Verify user has access to this event before returning email logs
     const logs = await ctx.db
       .query("emailLogs")
       .withIndex("by_event", (q) => q.eq("eventId", args.eventId))
@@ -909,6 +901,8 @@ export const getEmailStats = query({
     eventId: v.id("events"),
   },
   handler: async (ctx, args) => {
+    // TODO: Add proper authentication when moving to production (requires Clerk integration)
+    // Verify user has access to this event before returning stats
     const logs = await ctx.db
       .query("emailLogs")
       .withIndex("by_event", (q) => q.eq("eventId", args.eventId))
@@ -973,6 +967,8 @@ export const getEmailLogsByGuest = query({
     guestId: v.id("guests"),
   },
   handler: async (ctx, args) => {
+    // TODO: Add proper authentication when moving to production (requires Clerk integration)
+    // Verify user has access to this guest's event before returning logs
     const logs = await ctx.db
       .query("emailLogs")
       .withIndex("by_guest", (q) => q.eq("guestId", args.guestId))

@@ -1,12 +1,11 @@
 /**
  * Theme definitions for email templates
  *
- * NOTE: This file intentionally duplicates theme presets from src/lib/theme-presets.ts
- * Convex serverless functions cannot import from the src/ directory, so we maintain
- * a parallel copy here. When adding or modifying themes, update BOTH files.
- *
- * See: src/lib/theme-presets.ts (frontend)
+ * Theme colors are loaded from shared/theme-colors.json to ensure
+ * consistency between Convex backend and frontend.
  */
+
+import themeData from "../shared/theme-colors.json"
 
 export interface ThemeColors {
   primary: string
@@ -17,132 +16,41 @@ export interface ThemeColors {
   muted: string
 }
 
-interface ThemePreset {
-  id: string
-  colors: ThemeColors
+/**
+ * Validate that an object has the ThemeColors shape
+ * Throws an error if validation fails (fail-fast at load time)
+ */
+function validateThemeColors(obj: unknown, name: string): ThemeColors {
+  if (!obj || typeof obj !== "object") {
+    throw new Error(`Invalid theme colors for ${name}: not an object`)
+  }
+  const colors = obj as Record<string, unknown>
+  const requiredFields = ["primary", "secondary", "accent", "background", "foreground", "muted"] as const
+  for (const field of requiredFields) {
+    if (typeof colors[field] !== "string") {
+      throw new Error(`Invalid theme colors for ${name}: missing or invalid '${field}'`)
+    }
+  }
+  return {
+    primary: colors.primary as string,
+    secondary: colors.secondary as string,
+    accent: colors.accent as string,
+    background: colors.background as string,
+    foreground: colors.foreground as string,
+    muted: colors.muted as string,
+  }
 }
 
-const themePresets: ThemePreset[] = [
-  {
-    id: "desert-disco",
-    colors: {
-      primary: "#4E1212",
-      secondary: "#FFDB96",
-      accent: "#BC5831",
-      background: "#295C74",
-      foreground: "#FFDB96",
-      muted: "#3D4E5C",
-    },
-  },
-  {
-    id: "groovy",
-    colors: {
-      primary: "#6700D9",
-      secondary: "#C9A5FF",
-      accent: "#FF6B35",
-      background: "#1A0A2E",
-      foreground: "#F0E6FF",
-      muted: "#2D1B4E",
-    },
-  },
-  {
-    id: "art-nouveau",
-    colors: {
-      primary: "#B8860B",
-      secondary: "#2E4A3E",
-      accent: "#DAA520",
-      background: "#1C2B24",
-      foreground: "#F5E6D3",
-      muted: "#3A5548",
-    },
-  },
-  {
-    id: "abstract-landscape",
-    colors: {
-      primary: "#3B82F6",
-      secondary: "#D4A574",
-      accent: "#F59E0B",
-      background: "#1E3A5F",
-      foreground: "#F8FAFC",
-      muted: "#2D4A6F",
-    },
-  },
-  {
-    id: "desert-matisse",
-    colors: {
-      primary: "#C1440E",
-      secondary: "#E8B832",
-      accent: "#D64045",
-      background: "#2C1810",
-      foreground: "#FAF3E0",
-      muted: "#4A2C20",
-    },
-  },
-  {
-    id: "woodcut",
-    colors: {
-      primary: "#1A1A1A",
-      secondary: "#F5E6D3",
-      accent: "#8B4513",
-      background: "#FAF7F2",
-      foreground: "#1A1A1A",
-      muted: "#E8DFD4",
-    },
-  },
-  {
-    id: "linocut",
-    colors: {
-      primary: "#1E3A5F",
-      secondary: "#FFFFFF",
-      accent: "#F97316",
-      background: "#0F172A",
-      foreground: "#F8FAFC",
-      muted: "#1E293B",
-    },
-  },
-  {
-    id: "south-west",
-    colors: {
-      primary: "#C2703E",
-      secondary: "#40E0D0",
-      accent: "#FFD93D",
-      background: "#2C1810",
-      foreground: "#FDF4E3",
-      muted: "#4A3328",
-    },
-  },
-  {
-    id: "modern",
-    colors: {
-      primary: "#0F172A",
-      secondary: "#F1F5F9",
-      accent: "#3B82F6",
-      background: "#FFFFFF",
-      foreground: "#0F172A",
-      muted: "#E2E8F0",
-    },
-  },
-  {
-    id: "corporate",
-    colors: {
-      primary: "#1E40AF",
-      secondary: "#DBEAFE",
-      accent: "#059669",
-      background: "#F8FAFC",
-      foreground: "#1E293B",
-      muted: "#CBD5E1",
-    },
-  },
-]
+// Build theme preset map from shared JSON for O(1) lookup
+// Validates each preset at load time to catch config errors early
+const themePresetsMap = new Map<string, ThemeColors>(
+  Object.entries(themeData.presets).map(([key, value]) => [
+    key,
+    validateThemeColors(value, `preset '${key}'`),
+  ])
+)
 
-const defaultTheme: ThemeColors = {
-  primary: "#6700D9",
-  secondary: "#F0F1FF",
-  accent: "#00F0D2",
-  background: "#FAFAFA",
-  foreground: "#1A1A2E",
-  muted: "#E5E5E5",
-}
+const defaultTheme: ThemeColors = validateThemeColors(themeData.default, "default")
 
 export function resolveThemeColors(
   themePreset?: string,
@@ -153,11 +61,11 @@ export function resolveThemeColors(
     return customColors
   }
 
-  // Then check for preset
+  // Then check for preset (O(1) lookup)
   if (themePreset) {
-    const preset = themePresets.find((p) => p.id === themePreset)
-    if (preset) {
-      return preset.colors
+    const colors = themePresetsMap.get(themePreset)
+    if (colors) {
+      return colors
     }
   }
 

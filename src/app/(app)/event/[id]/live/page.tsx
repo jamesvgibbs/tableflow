@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { useQuery, useMutation } from 'convex/react'
 import { api } from '@convex/_generated/api'
-import { Id, Doc } from '@convex/_generated/dataModel'
+import type { Id, Doc } from '@convex/_generated/dataModel'
 import {
   ArrowLeft,
   Users,
@@ -16,18 +16,8 @@ import {
   CheckCircle2,
   Clock,
   UserCheck,
-  Play,
-  Pause,
-  ChevronDown,
-  ExternalLink,
-  Copy,
-  Timer,
-  Square,
-  AlertCircle,
-  RotateCcw,
   Settings,
   Maximize,
-  Minimize,
   Pencil,
   Mail,
   UsersRound,
@@ -36,29 +26,24 @@ import JSZip from 'jszip'
 
 import { generateQrCodeBlob } from '@/lib/qr-download'
 import { cn } from '@/lib/utils'
-import { resolveThemeColors } from '@/lib/theme-presets'
+import { resolveThemeColors, type ThemeColors } from '@/lib/theme-presets'
+import { getThemedStyles } from '@/lib/theme-utils'
 import { getTableLabel, getTableLabelPlural, getGuestLabel, getGuestLabelPlural, getDepartmentLabel } from '@/lib/terminology'
-import { type DietaryInfo } from '@/lib/types'
+import type { DietaryInfo } from '@/lib/types'
+import { useRoundTimer } from '@/hooks/use-round-timer'
 
 import { TableCard } from '@/components/table-card'
 import { GuestCard } from '@/components/guest-card'
 import { GuestForm } from '@/components/guest-form'
 import { EventThemeProvider } from '@/components/event-theme-provider'
 import { SeatherderLoading } from '@/components/seatherder-loading'
-import { ThemeColors } from '@/lib/theme-presets'
+import { PresentationMode, RoundManagementCard } from '@/components/live'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import {
   Dialog,
@@ -68,165 +53,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-
-// WCAG contrast calculation functions
-function getLuminance(hex: string): number {
-  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
-  if (!result) return 0
-  const [r, g, b] = [1, 2, 3].map((i) => {
-    const c = parseInt(result[i], 16) / 255
-    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)
-  })
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b
-}
-
-function getContrastRatio(color1: string, color2: string): number {
-  const l1 = getLuminance(color1)
-  const l2 = getLuminance(color2)
-  const lighter = Math.max(l1, l2)
-  const darker = Math.min(l1, l2)
-  return (lighter + 0.05) / (darker + 0.05)
-}
-
-function getAccessibleTextColor(background: string, preferredColor?: string): string {
-  if (preferredColor) {
-    const ratio = getContrastRatio(background, preferredColor)
-    if (ratio >= 4.5) return preferredColor
-  }
-  const blackRatio = getContrastRatio(background, '#000000')
-  const whiteRatio = getContrastRatio(background, '#FFFFFF')
-  return blackRatio > whiteRatio ? '#000000' : '#FFFFFF'
-}
-
-function getAccessibleMutedColor(background: string): string {
-  const bgLuminance = getLuminance(background)
-  return bgLuminance > 0.5 ? '#666666' : '#999999'
-}
-
-function adjustBrightness(hex: string, factor: number): string {
-  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
-  if (!result) return hex
-  const adjust = (value: number) => Math.min(255, Math.max(0, Math.round(value * factor)))
-  const r = adjust(parseInt(result[1], 16)).toString(16).padStart(2, '0')
-  const g = adjust(parseInt(result[2], 16)).toString(16).padStart(2, '0')
-  const b = adjust(parseInt(result[3], 16)).toString(16).padStart(2, '0')
-  return `#${r}${g}${b}`
-}
-
-function getThemedStyles(themeColors: ThemeColors | undefined) {
-  if (!themeColors) return null
-
-  const pageTextColor = getAccessibleTextColor(themeColors.background, themeColors.foreground)
-  // Force recalculate without preference for elements that need guaranteed contrast
-  const pageTextColorStrong = getAccessibleTextColor(themeColors.background)
-  const pageTextMuted = getAccessibleMutedColor(themeColors.background)
-  const cardTextColor = getAccessibleTextColor(themeColors.secondary)
-  const cardTextMuted = getAccessibleMutedColor(themeColors.secondary)
-  const primaryHoverBg = adjustBrightness(themeColors.primary, 0.85)
-  // Tab colors - use muted background for tab list, calculate text colors for that background
-  const tabsListBg = themeColors.muted
-  const tabsTextMuted = getAccessibleMutedColor(tabsListBg)
-  const tabsTextStrong = getAccessibleTextColor(tabsListBg)
-
-  return {
-    page: {
-      background: themeColors.background,
-      color: pageTextColor,
-    },
-    pageText: { color: pageTextColor },
-    pageTextMuted: { color: pageTextMuted },
-    card: {
-      backgroundColor: themeColors.secondary,
-      borderColor: `${themeColors.muted}40`,
-    },
-    cardText: { color: cardTextColor },
-    cardTextMuted: { color: cardTextMuted },
-    primaryButton: {
-      backgroundColor: themeColors.primary,
-      color: getAccessibleTextColor(themeColors.primary),
-      border: 'none',
-    },
-    primaryButtonHover: {
-      backgroundColor: primaryHoverBg,
-      color: getAccessibleTextColor(primaryHoverBg),
-      border: 'none',
-    },
-    outlineButton: {
-      backgroundColor: 'transparent',
-      color: pageTextColorStrong,
-      borderColor: `${pageTextColorStrong}40`,
-    },
-    outlineButtonHover: {
-      backgroundColor: `${pageTextColorStrong}15`,
-      color: pageTextColorStrong,
-      borderColor: `${pageTextColorStrong}40`,
-    },
-    // Outline button when placed on card background
-    outlineButtonOnCard: {
-      backgroundColor: 'transparent',
-      color: cardTextColor,
-      borderColor: `${cardTextColor}40`,
-    },
-    outlineButtonOnCardHover: {
-      backgroundColor: `${cardTextColor}10`,
-      color: cardTextColor,
-      borderColor: `${cardTextColor}40`,
-    },
-    ghostButton: {
-      backgroundColor: 'transparent',
-      color: pageTextColor,
-    },
-    ghostButtonHover: {
-      backgroundColor: `${pageTextColor}15`,
-      color: pageTextColor,
-    },
-    badge: {
-      backgroundColor: themeColors.accent,
-      color: getAccessibleTextColor(themeColors.accent),
-    },
-    // Badge on card background
-    badgeOnCard: {
-      backgroundColor: themeColors.accent,
-      color: getAccessibleTextColor(themeColors.accent),
-    },
-    badgeOutline: {
-      backgroundColor: 'transparent',
-      color: pageTextColor,
-      borderColor: `${pageTextColor}40`,
-    },
-    badgeOutlineOnCard: {
-      backgroundColor: 'transparent',
-      color: cardTextColor,
-      borderColor: `${cardTextColor}40`,
-    },
-    progressBar: {
-      backgroundColor: `${pageTextColor}20`,
-    },
-    progressFill: {
-      backgroundColor: themeColors.primary,
-    },
-    input: {
-      backgroundColor: `${themeColors.secondary}80`,
-      color: cardTextColor,
-      borderColor: `${themeColors.muted}40`,
-    },
-    // Tabs - use solid muted background for consistent theming (no transparency that blends oddly)
-    tabsList: {
-      backgroundColor: tabsListBg,
-    },
-    tabTrigger: {
-      color: tabsTextStrong,
-      backgroundColor: 'transparent',
-    },
-    tabTriggerActive: {
-      backgroundColor: themeColors.secondary,
-      color: cardTextColor,
-    },
-    divider: {
-      borderColor: `${pageTextColor}20`,
-    },
-  }
-}
 
 // Type for Convex guest data (as returned by the API)
 interface ConvexGuest {
@@ -257,7 +83,11 @@ interface PageProps {
 
 export default function LiveEventPage({ params }: PageProps) {
   const router = useRouter()
-  const [eventId, setEventId] = React.useState<Id<'events'> | null>(null)
+
+  // Use React.use() for Next.js 15+ async params
+  const resolvedParams = React.use(params)
+  // Note: Convex validates ID format in queries - invalid IDs will cause query to return null/throw
+  const eventId = resolvedParams.id as Id<'events'>
 
   // Round management state
   const [selectedRound, setSelectedRound] = React.useState(1)
@@ -289,31 +119,22 @@ export default function LiveEventPage({ params }: PageProps) {
     total: number
     checkedIn: number
     alreadyCheckedIn: number
-    emailsScheduled: number
+    emailsQueued: number
   } | null>(null)
 
-  // Load params on mount
-  React.useEffect(() => {
-    async function loadParams() {
-      const resolvedParams = await params
-      setEventId(resolvedParams.id as Id<'events'>)
-    }
-    loadParams()
-  }, [params])
-
   // Convex queries
-  const event = useQuery(api.events.get, eventId ? { id: eventId } : 'skip')
-  const guests = useQuery(api.guests.getByEvent, eventId ? { eventId } : 'skip')
-  const tables = useQuery(api.tables.getByEvent, eventId ? { eventId } : 'skip')
+  const event = useQuery(api.events.get, { id: eventId })
+  const guests = useQuery(api.guests.getByEvent, { eventId })
+  const tables = useQuery(api.tables.getByEvent, { eventId })
   const tablesByRound = useQuery(
     api.tables.getByEventAndRound,
-    eventId && event?.isAssigned
+    event?.isAssigned
       ? { eventId, roundNumber: selectedRound }
       : 'skip'
   )
   const roundAssignmentsByGuest = useQuery(
     api.guests.getAllRoundAssignmentsByEvent,
-    eventId && event?.isAssigned && (event?.numberOfRounds || 1) > 1
+    event?.isAssigned && (event?.numberOfRounds || 1) > 1
       ? { eventId }
       : 'skip'
   )
@@ -348,8 +169,6 @@ export default function LiveEventPage({ params }: PageProps) {
   // Update round duration
   const handleUpdateRoundDuration = React.useCallback(
     async (newDuration: number | undefined) => {
-      if (!eventId) return
-
       setRoundDuration(newDuration)
 
       try {
@@ -363,8 +182,6 @@ export default function LiveEventPage({ params }: PageProps) {
 
   // Start next round
   const handleStartNextRound = React.useCallback(async () => {
-    if (!eventId) return
-
     try {
       const result = await startNextRound({ id: eventId })
       setSelectedRound(result.currentRound)
@@ -376,8 +193,6 @@ export default function LiveEventPage({ params }: PageProps) {
 
   // End current round
   const handleEndCurrentRound = React.useCallback(async () => {
-    if (!eventId) return
-
     try {
       const result = await endCurrentRound({ id: eventId })
       toast.success(`Round ${result.endedRound} is complete.`)
@@ -388,8 +203,6 @@ export default function LiveEventPage({ params }: PageProps) {
 
   // Reset rounds back to start
   const handleResetRounds = React.useCallback(async () => {
-    if (!eventId) return
-
     try {
       await resetRounds({ id: eventId })
       setSelectedRound(1)
@@ -401,8 +214,6 @@ export default function LiveEventPage({ params }: PageProps) {
 
   // Pause the current round
   const handlePauseRound = React.useCallback(async () => {
-    if (!eventId) return
-
     try {
       await pauseRound({ id: eventId })
       toast.success('Pawsed! 🐾')
@@ -413,8 +224,6 @@ export default function LiveEventPage({ params }: PageProps) {
 
   // Resume the current round
   const handleResumeRound = React.useCallback(async () => {
-    if (!eventId) return
-
     try {
       await resumeRound({ id: eventId })
       toast.success('Resumed.')
@@ -423,40 +232,21 @@ export default function LiveEventPage({ params }: PageProps) {
     }
   }, [eventId, resumeRound])
 
-  // Live countdown for admin view
-  const [adminTimeRemaining, setAdminTimeRemaining] = React.useState<number>(0)
-
-  React.useEffect(() => {
-    // If paused, show the paused time
-    if (event?.isPaused && event?.pausedTimeRemaining !== undefined) {
-      setAdminTimeRemaining(event.pausedTimeRemaining)
-      return
-    }
-
-    if (!event?.roundStartedAt || !event?.roundDuration || !event?.currentRound) {
-      setAdminTimeRemaining(0)
-      return
-    }
-
-    const endTime = new Date(event.roundStartedAt).getTime() + event.roundDuration * 60 * 1000
-
-    const updateTimer = () => {
-      const remaining = Math.max(0, endTime - Date.now())
-      setAdminTimeRemaining(remaining)
-    }
-
-    updateTimer()
-    const interval = setInterval(updateTimer, 1000)
-
-    return () => clearInterval(interval)
-  }, [event?.roundStartedAt, event?.roundDuration, event?.currentRound, event?.isPaused, event?.pausedTimeRemaining])
-
-  // Format time for admin display
-  const adminMinutes = Math.floor(adminTimeRemaining / 60000)
-  const adminSeconds = Math.floor((adminTimeRemaining % 60000) / 1000)
-  const isTimerExpired = adminTimeRemaining === 0 && event?.roundStartedAt && event?.roundDuration && !event?.isPaused
-  const isTimerWarning = adminTimeRemaining > 0 && adminTimeRemaining < 60000 && !event?.isPaused
-  const isTimerPaused = event?.isPaused === true
+  // Use the round timer hook for countdown management
+  const {
+    timeRemaining: adminTimeRemaining,
+    minutes: adminMinutes,
+    seconds: adminSeconds,
+    isExpired: isTimerExpired,
+    isWarning: isTimerWarning,
+    isPaused: isTimerPaused,
+  } = useRoundTimer({
+    roundStartedAt: event?.roundStartedAt,
+    roundDuration: event?.roundDuration,
+    currentRound: event?.currentRound,
+    isPaused: event?.isPaused,
+    pausedTimeRemaining: event?.pausedTimeRemaining,
+  })
 
   // Filter guests for search
   const filteredGuests = React.useMemo(() => {
@@ -629,8 +419,6 @@ export default function LiveEventPage({ params }: PageProps) {
 
   // Handle bulk check-in
   const handleBulkCheckIn = React.useCallback(async () => {
-    if (!eventId) return
-
     setIsBulkCheckingIn(true)
     setBulkCheckInResult(null)
 
@@ -639,7 +427,7 @@ export default function LiveEventPage({ params }: PageProps) {
       setBulkCheckInResult(result)
 
       if (result.checkedIn > 0) {
-        toast.success(`Checked in ${result.checkedIn} ${result.checkedIn === 1 ? 'guest' : 'guests'}. ${result.emailsScheduled} emails queued.`)
+        toast.success(`Checked in ${result.checkedIn} ${result.checkedIn === 1 ? 'guest' : 'guests'}. ${result.emailsQueued} emails queued.`)
       } else if (result.alreadyCheckedIn === result.total) {
         toast.info('Everyone is already checked in.')
       } else {
@@ -657,7 +445,7 @@ export default function LiveEventPage({ params }: PageProps) {
   const themedStyles = React.useMemo(() => getThemedStyles(themeColors), [themeColors])
 
   // Loading state
-  if (!eventId || event === undefined) {
+  if (event === undefined) {
     return <SeatherderLoading message="I am fetching the live event..." />
   }
 
@@ -708,116 +496,25 @@ export default function LiveEventPage({ params }: PageProps) {
   // Presentation mode view
   if (isPresentationMode) {
     return (
-      <EventThemeProvider themePreset={event.themePreset} customColors={event.customColors}>
-        <div
-          className={cn(
-            'min-h-screen flex flex-col items-center justify-center p-8 transition-colors duration-500',
-            isTimerExpired ? 'bg-amber-600' : isTimerPaused ? 'bg-blue-700' : isTimerWarning ? 'bg-orange-600' : 'bg-[var(--event-background,#000)]'
-          )}
-          style={themeColors && !isTimerExpired && !isTimerPaused && !isTimerWarning ? { backgroundColor: themeColors.background } : undefined}
-        >
-          {/* Exit presentation button */}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setIsPresentationMode(false)}
-            className="absolute top-4 right-4 text-white/70 hover:text-white hover:bg-white/10"
-          >
-            <Minimize className="size-5" />
-          </Button>
-
-          {/* Event name */}
-          <div className="absolute top-4 left-4">
-            <h1
-              className="text-lg sm:text-xl font-medium"
-              style={{ color: themeColors?.foreground || '#fff' }}
-            >
-              {event.name}
-            </h1>
-          </div>
-
-          {/* Timer Display */}
-          <div className="text-center">
-            <p
-              className="text-xl sm:text-2xl mb-2 uppercase tracking-widest opacity-60"
-              style={{ color: themeColors?.foreground || '#fff' }}
-            >
-              Round {event.currentRound || 0} of {event.numberOfRounds || 1}
-            </p>
-
-            {event.currentRound && event.currentRound > 0 && (event.roundStartedAt || event.isPaused) ? (
-              event.roundDuration ? (
-                <div
-                  className={cn(
-                    'font-mono font-bold tabular-nums leading-none',
-                    'text-[8rem] sm:text-[12rem] md:text-[16rem] lg:text-[20rem]',
-                    isTimerExpired ? 'text-white animate-pulse' : isTimerWarning ? 'text-white animate-pulse' : ''
-                  )}
-                  style={{ color: isTimerExpired || isTimerWarning || isTimerPaused ? '#fff' : themeColors?.foreground || '#fff' }}
-                >
-                  {isTimerExpired ? "TIME'S UP" : `${adminMinutes}:${adminSeconds.toString().padStart(2, '0')}`}
-                </div>
-              ) : (
-                <div
-                  className="text-4xl font-medium opacity-60 py-4"
-                  style={{ color: themeColors?.foreground || '#fff' }}
-                >
-                  No time limit
-                </div>
-              )
-            ) : (
-              <div
-                className="text-4xl font-medium opacity-60 py-4"
-                style={{ color: themeColors?.foreground || '#fff' }}
-              >
-                Waiting to start...
-              </div>
-            )}
-
-            {isTimerPaused && (
-              <div className="mt-8 text-2xl sm:text-4xl font-bold uppercase tracking-widest text-white animate-pulse">
-                PAWSED
-              </div>
-            )}
-
-            {/* Check-in stats */}
-            <div
-              className="mt-12 flex items-center justify-center gap-8"
-              style={{ color: themeColors?.foreground || '#fff' }}
-            >
-              <div className="text-center">
-                <p className="text-6xl font-bold">{checkInStats.checkedIn}</p>
-                <p className="text-sm uppercase tracking-wider opacity-60">Checked In</p>
-              </div>
-              <div className="text-4xl opacity-30">/</div>
-              <div className="text-center">
-                <p className="text-6xl font-bold">{checkInStats.total}</p>
-                <p className="text-sm uppercase tracking-wider opacity-60">Total</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Round indicators at bottom */}
-          <div className="absolute bottom-8 left-0 right-0 flex justify-center">
-            <div className="flex items-center gap-4">
-              {Array.from({ length: event.numberOfRounds || 1 }, (_, i) => (
-                <div
-                  key={i}
-                  className={cn(
-                    'w-4 h-4 rounded-full transition-colors',
-                    i + 1 < (event.currentRound || 0)
-                      ? 'opacity-30'
-                      : i + 1 === event.currentRound
-                      ? 'opacity-100'
-                      : 'opacity-10'
-                  )}
-                  style={{ backgroundColor: themeColors?.foreground || '#fff' }}
-                />
-              ))}
-            </div>
-          </div>
-        </div>
-      </EventThemeProvider>
+      <PresentationMode
+        eventName={event.name}
+        themePreset={event.themePreset}
+        customColors={event.customColors}
+        themeColors={themeColors}
+        currentRound={event.currentRound || 0}
+        numberOfRounds={event.numberOfRounds || 1}
+        roundStartedAt={event.roundStartedAt}
+        roundDuration={event.roundDuration}
+        isPaused={isTimerPaused}
+        timeRemaining={adminTimeRemaining}
+        minutes={adminMinutes}
+        seconds={adminSeconds}
+        isExpired={isTimerExpired}
+        isWarning={isTimerWarning}
+        checkedIn={checkInStats.checkedIn}
+        total={checkInStats.total}
+        onExit={() => setIsPresentationMode(false)}
+      />
     )
   }
 
@@ -899,322 +596,30 @@ export default function LiveEventPage({ params }: PageProps) {
 
             {/* Round Management */}
             {(event.numberOfRounds || 1) > 1 && (
-              <Card
-                className={cn(
-                  'mb-6 transition-colors',
-                  !themedStyles && isTimerExpired && 'border-amber-500 bg-amber-50 dark:bg-amber-950/30',
-                  !themedStyles && isTimerWarning && 'border-orange-400 bg-orange-50 dark:bg-orange-950/30'
-                )}
-                style={themedStyles && !isTimerExpired && !isTimerWarning ? themedStyles.card : undefined}
-              >
-                <CardContent className="p-6">
-                  {/* Main Timer Display */}
-                  <div className="text-center mb-6">
-                    <div className="flex items-center justify-center gap-2 mb-2">
-                      <span
-                        className="text-sm uppercase tracking-wider"
-                        style={themedStyles?.cardTextMuted}
-                      >
-                        Round {event.currentRound || 0} of {event.numberOfRounds || 1}
-                      </span>
-                      {event.currentRound && event.currentRound > 0 && event.isPaused && (
-                        <Badge className="bg-blue-600 text-white">Pawsed 🐾</Badge>
-                      )}
-                      {event.currentRound && event.currentRound > 0 && event.roundStartedAt && !event.isPaused && (
-                        <Badge
-                          variant={isTimerExpired ? 'destructive' : 'outline'}
-                          className={!isTimerExpired && themedStyles ? 'border-0' : ''}
-                          style={!isTimerExpired && themedStyles ? themedStyles.badgeOnCard : undefined}
-                        >
-                          {isTimerExpired ? "TIME'S UP" : 'Active'}
-                        </Badge>
-                      )}
-                      {(!event.currentRound || event.currentRound === 0) && (
-                        <Badge
-                          variant="outline"
-                          className={themedStyles ? 'border-0' : ''}
-                          style={themedStyles ? { backgroundColor: `${themeColors?.muted}80`, color: themedStyles.cardText.color } : undefined}
-                        >
-                          Not Started
-                        </Badge>
-                      )}
-                    </div>
-
-                    {event.currentRound && event.currentRound > 0 && (event.roundStartedAt || event.isPaused) ? (
-                      event.roundDuration ? (
-                        <div className="space-y-2">
-                          <div
-                            className={cn(
-                              'text-7xl sm:text-8xl font-mono font-bold tabular-nums leading-none py-4',
-                              isTimerExpired ? 'text-amber-600' : isTimerPaused ? 'text-blue-600' : isTimerWarning ? 'text-orange-600 animate-pulse' : ''
-                            )}
-                            style={!isTimerExpired && !isTimerPaused && !isTimerWarning && themedStyles ? themedStyles.cardText : undefined}
-                          >
-                            {isTimerExpired ? (
-                              <span className="flex items-center justify-center gap-3">
-                                <AlertCircle className="size-12" />
-                                TIME&apos;S UP
-                              </span>
-                            ) : (
-                              `${adminMinutes}:${adminSeconds.toString().padStart(2, '0')}`
-                            )}
-                          </div>
-                          {isTimerPaused && (
-                            <div className="text-lg font-bold text-blue-600 uppercase tracking-widest animate-pulse">
-                              PAWSED
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="text-4xl font-medium py-4" style={themedStyles?.cardTextMuted}>
-                          No time limit set
-                        </div>
-                      )
-                    ) : (
-                      <div className="text-4xl font-medium py-4" style={themedStyles?.cardTextMuted}>
-                        Waiting to start...
-                      </div>
-                    )}
-
-                    {/* Progress bar */}
-                    {event.roundDuration && event.currentRound && event.currentRound > 0 && (event.roundStartedAt || event.isPaused) && (
-                      <div
-                        className="w-full max-w-md mx-auto h-2 rounded-full overflow-hidden"
-                        style={themedStyles ? { backgroundColor: `${themedStyles.cardTextMuted.color}20` } : { backgroundColor: 'var(--muted)' }}
-                      >
-                        <div
-                          className={cn(
-                            'h-full transition-all duration-1000',
-                            !themedStyles && (isTimerExpired ? 'bg-amber-500' : isTimerPaused ? 'bg-blue-500' : isTimerWarning ? 'bg-orange-500' : 'bg-primary')
-                          )}
-                          style={{
-                            width: `${(adminTimeRemaining / (event.roundDuration * 60 * 1000)) * 100}%`,
-                            backgroundColor: isTimerExpired ? '#f59e0b' : isTimerPaused ? '#3b82f6' : isTimerWarning ? '#f97316' : themedStyles ? themeColors?.primary : undefined,
-                          }}
-                        />
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Duration Setting */}
-                  {!event.roundStartedAt && (
-                    <div className="flex items-center justify-center gap-3 mb-6">
-                      <Label htmlFor="duration-input" className="text-sm" style={themedStyles?.cardTextMuted}>
-                        Round Duration:
-                      </Label>
-                      <div className="flex items-center gap-2">
-                        <Input
-                          id="duration-input"
-                          type="number"
-                          min={1}
-                          max={180}
-                          value={roundDuration || ''}
-                          onChange={(e) => {
-                            const val = parseInt(e.target.value)
-                            handleUpdateRoundDuration(val > 0 ? val : undefined)
-                          }}
-                          placeholder="No limit"
-                          className="w-24 text-center"
-                          style={themedStyles?.input}
-                        />
-                        <span className="text-sm" style={themedStyles?.cardTextMuted}>minutes</span>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Control Buttons */}
-                  <div className="flex flex-wrap items-center justify-center gap-3 mb-6">
-                    {(event.currentRound || 0) < (event.numberOfRounds || 1) && (
-                      <Button
-                        onClick={handleStartNextRound}
-                        size="lg"
-                        className="gap-2 transition-colors"
-                        style={themedStyles
-                          ? hoveredButton === 'startRound'
-                            ? themedStyles.primaryButtonHover
-                            : themedStyles.primaryButton
-                          : undefined
-                        }
-                        onMouseEnter={() => setHoveredButton('startRound')}
-                        onMouseLeave={() => setHoveredButton(null)}
-                      >
-                        <Play className="size-5" />
-                        {!event.currentRound || event.currentRound === 0
-                          ? 'Start Round 1'
-                          : !event.roundStartedAt
-                          ? `Start Round ${(event.currentRound || 0) + 1}`
-                          : `Start Round ${(event.currentRound || 0) + 1}`}
-                      </Button>
-                    )}
-
-                    {event.currentRound && event.currentRound > 0 && event.roundDuration && (event.roundStartedAt || event.isPaused) && (
-                      event.isPaused ? (
-                        <Button
-                          onClick={handleResumeRound}
-                          variant="default"
-                          size="lg"
-                          className="gap-2 transition-colors"
-                          style={themedStyles
-                            ? hoveredButton === 'resume'
-                              ? themedStyles.primaryButtonHover
-                              : themedStyles.primaryButton
-                            : undefined
-                          }
-                          onMouseEnter={() => setHoveredButton('resume')}
-                          onMouseLeave={() => setHoveredButton(null)}
-                        >
-                          <Play className="size-5" />
-                          Resume
-                        </Button>
-                      ) : (
-                        <Button
-                          onClick={handlePauseRound}
-                          variant="outline"
-                          size="lg"
-                          className="gap-2 transition-colors"
-                          style={themedStyles
-                            ? hoveredButton === 'pause'
-                              ? themedStyles.outlineButtonOnCardHover
-                              : themedStyles.outlineButtonOnCard
-                            : undefined
-                          }
-                          onMouseEnter={() => setHoveredButton('pause')}
-                          onMouseLeave={() => setHoveredButton(null)}
-                        >
-                          <Pause className="size-5" />
-                          Paws
-                        </Button>
-                      )
-                    )}
-
-                    {event.currentRound && event.currentRound > 0 && (event.roundStartedAt || event.isPaused) && (
-                      <Button
-                        onClick={handleEndCurrentRound}
-                        variant="outline"
-                        size="lg"
-                        className="gap-2 transition-colors"
-                        style={themedStyles
-                          ? hoveredButton === 'endRound'
-                            ? themedStyles.outlineButtonOnCardHover
-                            : themedStyles.outlineButtonOnCard
-                          : undefined
-                        }
-                        onMouseEnter={() => setHoveredButton('endRound')}
-                        onMouseLeave={() => setHoveredButton(null)}
-                      >
-                        <Square className="size-5" />
-                        End Round {event.currentRound}
-                      </Button>
-                    )}
-
-                    {event.currentRound === event.numberOfRounds && !event.roundStartedAt && (
-                      <Badge
-                        variant="secondary"
-                        className="text-base px-4 py-2"
-                        style={themedStyles ? { backgroundColor: `${themeColors?.muted}60`, color: themedStyles.cardText.color } : undefined}
-                      >
-                        All rounds complete
-                      </Badge>
-                    )}
-                  </div>
-
-                  {/* Round Selector & Timer Links */}
-                  <div
-                    className="flex flex-wrap items-center justify-between gap-4 pt-4 border-t"
-                    style={themedStyles?.divider}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm" style={themedStyles?.cardTextMuted}>View:</span>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="gap-2 transition-colors"
-                            style={themedStyles
-                              ? hoveredButton === 'roundSelect'
-                                ? themedStyles.outlineButtonOnCardHover
-                                : themedStyles.outlineButtonOnCard
-                              : undefined
-                            }
-                            onMouseEnter={() => setHoveredButton('roundSelect')}
-                            onMouseLeave={() => setHoveredButton(null)}
-                          >
-                            Round {selectedRound}
-                            <ChevronDown className="size-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent>
-                          {Array.from({ length: event.numberOfRounds || 1 }, (_, i) => (
-                            <DropdownMenuItem
-                              key={i + 1}
-                              onClick={() => setSelectedRound(i + 1)}
-                              className={cn(selectedRound === i + 1 && 'bg-accent')}
-                            >
-                              Round {i + 1}
-                              {event.currentRound === i + 1 && (
-                                <Badge
-                                  variant="outline"
-                                  className="ml-2 text-xs border-0"
-                                  style={themedStyles ? themedStyles.badgeOnCard : undefined}
-                                >
-                                  Active
-                                </Badge>
-                              )}
-                            </DropdownMenuItem>
-                          ))}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="gap-2 transition-colors"
-                        onClick={() => window.open(`${baseUrl}/timer/${eventId}`, '_blank')}
-                        style={themedStyles
-                          ? hoveredButton === 'openTimer'
-                            ? themedStyles.outlineButtonOnCardHover
-                            : themedStyles.outlineButtonOnCard
-                          : undefined
-                        }
-                        onMouseEnter={() => setHoveredButton('openTimer')}
-                        onMouseLeave={() => setHoveredButton(null)}
-                      >
-                        <Timer className="size-4" />
-                        Open Timer
-                        <ExternalLink className="size-3" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="gap-2 transition-colors"
-                        onClick={() => {
-                          navigator.clipboard.writeText(`${baseUrl}/timer/${eventId}`)
-                          toast.success('Copied.')
-                        }}
-                        style={themedStyles?.cardTextMuted}
-                      >
-                        <Copy className="size-4" />
-                        Copy Link
-                      </Button>
-                      {(event.currentRound || 0) > 0 && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="gap-2 hover:text-destructive transition-colors"
-                          onClick={handleResetRounds}
-                          style={themedStyles?.cardTextMuted}
-                        >
-                          <RotateCcw className="size-4" />
-                          Reset Rounds
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+              <RoundManagementCard
+                eventId={eventId}
+                currentRound={event.currentRound || 0}
+                numberOfRounds={event.numberOfRounds || 1}
+                roundStartedAt={event.roundStartedAt}
+                roundDuration={event.roundDuration}
+                isPaused={isTimerPaused}
+                timeRemaining={adminTimeRemaining}
+                minutes={adminMinutes}
+                seconds={adminSeconds}
+                isExpired={isTimerExpired}
+                isWarning={isTimerWarning}
+                selectedRound={selectedRound}
+                onSelectedRoundChange={setSelectedRound}
+                onStartNextRound={handleStartNextRound}
+                onEndCurrentRound={handleEndCurrentRound}
+                onPauseRound={handlePauseRound}
+                onResumeRound={handleResumeRound}
+                onResetRounds={handleResetRounds}
+                onUpdateRoundDuration={handleUpdateRoundDuration}
+                themeColors={themeColors}
+                themedStyles={themedStyles}
+                baseUrl={baseUrl}
+              />
             )}
 
             {/* Results Tabs */}
@@ -1671,7 +1076,7 @@ export default function LiveEventPage({ params }: PageProps) {
                 </div>
                 <div className="flex items-center gap-2">
                   <Mail className="size-5 text-blue-600" />
-                  <span>{bulkCheckInResult.emailsScheduled} emails queued</span>
+                  <span>{bulkCheckInResult.emailsQueued} emails queued</span>
                 </div>
                 {bulkCheckInResult.alreadyCheckedIn > 0 && (
                   <div className="flex items-center gap-2 text-muted-foreground">
