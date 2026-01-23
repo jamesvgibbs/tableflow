@@ -53,14 +53,26 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { SeatherderLoading } from "@/components/seatherder-loading"
+import { ProtectedRoute } from "@/components/protected-route"
 
 interface PageProps {
   params: Promise<{ id: string }>
 }
 
 export default function EmailsPage({ params }: PageProps) {
+  return (
+    <ProtectedRoute>
+      <EmailsPageContent params={params} />
+    </ProtectedRoute>
+  )
+}
+
+function EmailsPageContent({ params }: PageProps) {
   const router = useRouter()
-  const [eventId, setEventId] = React.useState<Id<"events"> | null>(null)
+
+  // Use React.use() for Next.js 15+ async params
+  const resolvedParams = React.use(params)
+  const eventId = resolvedParams.id as Id<"events">
 
   // Email settings form state
   const [senderName, setSenderName] = React.useState("")
@@ -81,27 +93,24 @@ export default function EmailsPage({ params }: PageProps) {
   // File upload state
   const [isUploading, setIsUploading] = React.useState(false)
 
-  // Load params on mount
-  React.useEffect(() => {
-    async function loadParams() {
-      const resolvedParams = await params
-      setEventId(resolvedParams.id as Id<"events">)
-    }
-    loadParams()
-  }, [params])
+  // Test email state
+  const [showTestEmailDialog, setShowTestEmailDialog] = React.useState(false)
+  const [testEmailAddress, setTestEmailAddress] = React.useState("")
+  const [isSendingTestEmail, setIsSendingTestEmail] = React.useState(false)
 
   // Convex queries
-  const event = useQuery(api.events.get, eventId ? { id: eventId } : "skip")
-  const emailStats = useQuery(api.email.getEmailStats, eventId ? { eventId } : "skip")
-  const emailLogs = useQuery(api.email.getEmailLogsByEvent, eventId ? { eventId } : "skip")
-  const attachments = useQuery(api.attachments.getByEvent, eventId ? { eventId } : "skip")
+  const event = useQuery(api.events.get, { id: eventId })
+  const emailStats = useQuery(api.email.getEmailStats, { eventId })
+  const emailLogs = useQuery(api.email.getEmailLogsByEvent, { eventId })
+  const attachments = useQuery(api.attachments.getByEvent, { eventId })
 
   // Convex mutations and actions
   const updateEmailSettings = useMutation(api.events.updateEmailSettings)
   const generateUploadUrl = useMutation(api.attachments.generateUploadUrl)
   const saveAttachment = useMutation(api.attachments.saveAttachment)
   const deleteAttachment = useMutation(api.attachments.deleteAttachment)
-  const sendBulkInvitations = useAction(api.email.sendBulkInvitations)
+  const sendBulkInvitations = useMutation(api.email.sendBulkInvitations)
+  const sendTestEmail = useAction(api.email.sendTestEmail)
 
   // Sync settings from event
   React.useEffect(() => {
@@ -135,7 +144,7 @@ export default function EmailsPage({ params }: PageProps) {
 
   // Save email settings
   const handleSaveSettings = async () => {
-    if (!eventId || !senderName.trim()) {
+    if (!senderName.trim()) {
       toast.error("Sender name is required")
       return
     }
@@ -159,7 +168,7 @@ export default function EmailsPage({ params }: PageProps) {
 
   // Handle file upload
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!eventId || !e.target.files || e.target.files.length === 0) return
+    if (!e.target.files || e.target.files.length === 0) return
 
     const file = e.target.files[0]
     const maxSize = 10 * 1024 * 1024 // 10MB
@@ -216,10 +225,8 @@ export default function EmailsPage({ params }: PageProps) {
     }
   }
 
-  // Send bulk invitations
+  // Send bulk invitations (queued for rate-limited delivery)
   const handleSendInvitations = async () => {
-    if (!eventId) return
-
     setIsSending(true)
     setSendProgress(null)
 
@@ -230,24 +237,53 @@ export default function EmailsPage({ params }: PageProps) {
       })
 
       setSendProgress({
-        sent: result.sent,
-        total: result.sent + result.failed + result.skipped,
-        errors: result.errors?.map((e) => `${e.email}: ${e.error}`) || [],
+        sent: result.queued,
+        total: result.queued + result.skipped,
+        errors: [],
       })
 
-      if (result.success) {
-        toast.success(`Sent ${result.sent} invitation${result.sent !== 1 ? "s" : ""}`)
-      } else {
-        toast.warning(
-          `Sent ${result.sent}, failed ${result.failed}, skipped ${result.skipped}`
+      if (result.queued > 0) {
+        toast.success(
+          `Queued ${result.queued} invitation${result.queued !== 1 ? "s" : ""} for delivery`
         )
+      } else if (result.message) {
+        toast.info(result.message)
       }
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Failed to send invitations"
+        error instanceof Error ? error.message : "Failed to queue invitations"
       )
     } finally {
       setIsSending(false)
+    }
+  }
+
+  // Send test email
+  const handleSendTestEmail = async () => {
+    if (!testEmailAddress.trim()) {
+      toast.error("Please enter an email address")
+      return
+    }
+
+    setIsSendingTestEmail(true)
+
+    try {
+      const result = await sendTestEmail({
+        eventId,
+        toEmail: testEmailAddress.trim(),
+      })
+
+      if (result.success) {
+        toast.success(`Test email sent to ${testEmailAddress}`)
+        setShowTestEmailDialog(false)
+        setTestEmailAddress("")
+      } else {
+        toast.error(result.error || "Failed to send test email")
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to send test email")
+    } finally {
+      setIsSendingTestEmail(false)
     }
   }
 
@@ -300,7 +336,7 @@ export default function EmailsPage({ params }: PageProps) {
   }
 
   // Loading state
-  if (!eventId || event === undefined) {
+  if (event === undefined) {
     return <SeatherderLoading message="I am loading the email settings..." />
   }
 
@@ -517,19 +553,31 @@ export default function EmailsPage({ params }: PageProps) {
                     </div>
                   )}
 
-                  <Button
-                    size="lg"
-                    onClick={() => setShowSendDialog(true)}
-                    disabled={
-                      !event.emailSettings?.senderName ||
-                      !emailStats ||
-                      emailStats.guestsWithEmail - emailStats.invitationsSent === 0
-                    }
-                    className="w-full gap-2"
-                  >
-                    <Mail className="size-5" />
-                    Send Invitations
-                  </Button>
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <Button
+                      size="lg"
+                      onClick={() => setShowSendDialog(true)}
+                      disabled={
+                        !event.emailSettings?.senderName ||
+                        !emailStats ||
+                        emailStats.guestsWithEmail - emailStats.invitationsSent === 0
+                      }
+                      className="flex-1 gap-2"
+                    >
+                      <Mail className="size-5" />
+                      Send Invitations
+                    </Button>
+                    <Button
+                      size="lg"
+                      variant="outline"
+                      onClick={() => setShowTestEmailDialog(true)}
+                      disabled={!event?.emailSettings?.senderName}
+                      className="gap-2"
+                    >
+                      <Send className="size-5" />
+                      Send Test Email
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             </TabsContent>
@@ -788,6 +836,64 @@ export default function EmailsPage({ params }: PageProps) {
                   )}
                 </Button>
               )}
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Test Email Dialog */}
+        <Dialog open={showTestEmailDialog} onOpenChange={setShowTestEmailDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Send Test Email</DialogTitle>
+              <DialogDescription>
+                Send a test email to verify your email configuration is working.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="py-4 space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="test-email">Email Address</Label>
+                <Input
+                  id="test-email"
+                  type="email"
+                  placeholder="your@email.com"
+                  value={testEmailAddress}
+                  onChange={(e) => setTestEmailAddress(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && testEmailAddress.trim() && !isSendingTestEmail) {
+                      handleSendTestEmail()
+                    }
+                  }}
+                />
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowTestEmailDialog(false)
+                  setTestEmailAddress("")
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSendTestEmail}
+                disabled={isSendingTestEmail || !testEmailAddress.trim()}
+              >
+                {isSendingTestEmail ? (
+                  <>
+                    <Loader2 className="mr-2 size-4 animate-spin" />
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    <Send className="mr-2 size-4" />
+                    Send Test
+                  </>
+                )}
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

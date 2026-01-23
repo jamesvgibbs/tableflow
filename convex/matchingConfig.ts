@@ -322,7 +322,7 @@ export const saveSeatingConfig = mutation({
   args: {
     eventId: v.id("events"),
     seatingType: seatingTypeValidator,
-    answers: v.any(), // Record<string, string> - question answers
+    answers: v.record(v.string(), v.string()), // Question ID -> answer mapping
     weights: weightsValidator,
     numberOfRounds: v.optional(v.number()),
     vipTables: v.optional(v.array(v.number())),

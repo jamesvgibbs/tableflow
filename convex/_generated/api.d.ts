@@ -11,6 +11,7 @@
 import type * as attachments from "../attachments.js";
 import type * as constraints from "../constraints.js";
 import type * as email from "../email.js";
+import type * as emailQueue from "../emailQueue.js";
 import type * as events from "../events.js";
 import type * as guests from "../guests.js";
 import type * as http from "../http.js";
@@ -18,6 +19,7 @@ import type * as matching from "../matching.js";
 import type * as matchingConfig from "../matchingConfig.js";
 import type * as preview from "../preview.js";
 import type * as tables from "../tables.js";
+import type * as themes from "../themes.js";
 
 import type {
   ApiFromModules,
@@ -29,6 +31,7 @@ declare const fullApi: ApiFromModules<{
   attachments: typeof attachments;
   constraints: typeof constraints;
   email: typeof email;
+  emailQueue: typeof emailQueue;
   events: typeof events;
   guests: typeof guests;
   http: typeof http;
@@ -36,6 +39,7 @@ declare const fullApi: ApiFromModules<{
   matchingConfig: typeof matchingConfig;
   preview: typeof preview;
   tables: typeof tables;
+  themes: typeof themes;
 }>;
 
 /**
