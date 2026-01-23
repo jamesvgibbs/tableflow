@@ -81,6 +81,11 @@ export default function EmailsPage({ params }: PageProps) {
   // File upload state
   const [isUploading, setIsUploading] = React.useState(false)
 
+  // Test email state
+  const [showTestEmailDialog, setShowTestEmailDialog] = React.useState(false)
+  const [testEmailAddress, setTestEmailAddress] = React.useState("")
+  const [isSendingTestEmail, setIsSendingTestEmail] = React.useState(false)
+
   // Load params on mount
   React.useEffect(() => {
     async function loadParams() {
@@ -102,6 +107,7 @@ export default function EmailsPage({ params }: PageProps) {
   const saveAttachment = useMutation(api.attachments.saveAttachment)
   const deleteAttachment = useMutation(api.attachments.deleteAttachment)
   const sendBulkInvitations = useAction(api.email.sendBulkInvitations)
+  const sendTestEmail = useAction(api.email.sendTestEmail)
 
   // Sync settings from event
   React.useEffect(() => {
@@ -248,6 +254,35 @@ export default function EmailsPage({ params }: PageProps) {
       )
     } finally {
       setIsSending(false)
+    }
+  }
+
+  // Send test email
+  const handleSendTestEmail = async () => {
+    if (!eventId || !testEmailAddress.trim()) {
+      toast.error("Please enter an email address")
+      return
+    }
+
+    setIsSendingTestEmail(true)
+
+    try {
+      const result = await sendTestEmail({
+        eventId,
+        toEmail: testEmailAddress.trim(),
+      })
+
+      if (result.success) {
+        toast.success(`Test email sent to ${testEmailAddress}`)
+        setShowTestEmailDialog(false)
+        setTestEmailAddress("")
+      } else {
+        toast.error(result.error || "Failed to send test email")
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to send test email")
+    } finally {
+      setIsSendingTestEmail(false)
     }
   }
 
@@ -517,19 +552,30 @@ export default function EmailsPage({ params }: PageProps) {
                     </div>
                   )}
 
-                  <Button
-                    size="lg"
-                    onClick={() => setShowSendDialog(true)}
-                    disabled={
-                      !event.emailSettings?.senderName ||
-                      !emailStats ||
-                      emailStats.guestsWithEmail - emailStats.invitationsSent === 0
-                    }
-                    className="w-full gap-2"
-                  >
-                    <Mail className="size-5" />
-                    Send Invitations
-                  </Button>
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <Button
+                      size="lg"
+                      onClick={() => setShowSendDialog(true)}
+                      disabled={
+                        !event.emailSettings?.senderName ||
+                        !emailStats ||
+                        emailStats.guestsWithEmail - emailStats.invitationsSent === 0
+                      }
+                      className="flex-1 gap-2"
+                    >
+                      <Mail className="size-5" />
+                      Send Invitations
+                    </Button>
+                    <Button
+                      size="lg"
+                      variant="outline"
+                      onClick={() => setShowTestEmailDialog(true)}
+                      className="gap-2"
+                    >
+                      <Send className="size-5" />
+                      Send Test Email
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             </TabsContent>
@@ -788,6 +834,64 @@ export default function EmailsPage({ params }: PageProps) {
                   )}
                 </Button>
               )}
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Test Email Dialog */}
+        <Dialog open={showTestEmailDialog} onOpenChange={setShowTestEmailDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Send Test Email</DialogTitle>
+              <DialogDescription>
+                Send a test email to verify your email configuration is working.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="py-4 space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="test-email">Email Address</Label>
+                <Input
+                  id="test-email"
+                  type="email"
+                  placeholder="your@email.com"
+                  value={testEmailAddress}
+                  onChange={(e) => setTestEmailAddress(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && testEmailAddress.trim()) {
+                      handleSendTestEmail()
+                    }
+                  }}
+                />
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowTestEmailDialog(false)
+                  setTestEmailAddress("")
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSendTestEmail}
+                disabled={isSendingTestEmail || !testEmailAddress.trim()}
+              >
+                {isSendingTestEmail ? (
+                  <>
+                    <Loader2 className="mr-2 size-4 animate-spin" />
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    <Send className="mr-2 size-4" />
+                    Send Test
+                  </>
+                )}
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

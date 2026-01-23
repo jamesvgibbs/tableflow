@@ -33,18 +33,58 @@ function replacePlaceholders(
   }
 ): string {
   let result = template
+
+  // Handle conditional blocks first: {{#if qr_code_url}}...{{/if}}
+  const conditionalRegex = /\{\{#if qr_code_url\}\}([\s\S]*?)\{\{\/if\}\}/g
+  if (data.qrCodeUrl) {
+    // Keep the content inside the conditional
+    result = result.replace(conditionalRegex, "$1")
+  } else {
+    // Remove the entire conditional block
+    result = result.replace(conditionalRegex, "")
+  }
+
+  // Replace simple placeholders
   result = result.replace(/\{\{guest_name\}\}/g, data.guestName)
   result = result.replace(/\{\{event_name\}\}/g, data.eventName)
   result = result.replace(/\{\{table_number\}\}/g, String(data.tableNumber || "TBD"))
   result = result.replace(/\{\{qr_code_url\}\}/g, data.qrCodeUrl || "")
 
-  // Handle round assignments if present
-  if (data.roundAssignments && data.roundAssignments.length > 0) {
-    const assignmentsHtml = data.roundAssignments
-      .map((a) => `<li>Round ${a.roundNumber}: Table ${a.tableNumber}</li>`)
+  // Handle round assignments if present (multi-round events)
+  if (data.roundAssignments && data.roundAssignments.length > 1) {
+    // Build a visual table for multi-round events
+    const rows = data.roundAssignments
+      .map((a, index) => {
+        const isFirst = index === 0
+        const rowBg = isFirst ? "#f0f0ff" : "#fff"
+        const indicator = isFirst ? `<span style="color: #6700D9; font-weight: 500;"> ← Start here</span>` : ""
+        return `
+          <tr style="background: ${rowBg};">
+            <td style="padding: 12px 16px; border-bottom: 1px solid #eee; font-weight: ${isFirst ? "600" : "400"};">Round ${a.roundNumber}</td>
+            <td style="padding: 12px 16px; border-bottom: 1px solid #eee; text-align: center; font-weight: ${isFirst ? "700" : "500"}; font-size: ${isFirst ? "18px" : "16px"};">Table ${a.tableNumber}${indicator}</td>
+          </tr>`
+      })
       .join("")
-    result = result.replace(/\{\{round_assignments\}\}/g, `<ul>${assignmentsHtml}</ul>`)
+
+    const assignmentsHtml = `
+      <div style="margin: 24px 0;">
+        <p style="color: #333; font-weight: 600; margin-bottom: 8px;">This event has multiple rounds.</p>
+        <p style="color: #666; font-size: 14px; margin-bottom: 16px;">You'll switch tables between rounds to meet new people. Listen for announcements.</p>
+        <table style="width: 100%; border-collapse: collapse; border: 1px solid #eee; border-radius: 8px; overflow: hidden;">
+          <thead>
+            <tr style="background: #f9f9f9;">
+              <th style="padding: 10px 16px; text-align: left; font-size: 12px; text-transform: uppercase; color: #666; letter-spacing: 1px;">Round</th>
+              <th style="padding: 10px 16px; text-align: center; font-size: 12px; text-transform: uppercase; color: #666; letter-spacing: 1px;">Your Table</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows}
+          </tbody>
+        </table>
+      </div>`
+    result = result.replace(/\{\{round_assignments\}\}/g, assignmentsHtml)
   } else {
+    // Single round - no need to show schedule
     result = result.replace(/\{\{round_assignments\}\}/g, "")
   }
 
@@ -77,12 +117,12 @@ const DEFAULT_TEMPLATES = {
         <h1 style="color: #333;">You're Checked In!</h1>
         <p>Hello {{guest_name}},</p>
         <p>You've successfully checked in to <strong>{{event_name}}</strong>.</p>
-        <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; text-align: center; margin: 20px 0;">
-          <p style="margin: 0; color: #666; font-size: 14px;">YOUR TABLE</p>
-          <p style="margin: 10px 0 0 0; font-size: 48px; font-weight: bold; color: #333;">{{table_number}}</p>
+        <div style="background: #6700D9; padding: 24px; border-radius: 12px; text-align: center; margin: 24px 0;">
+          <p style="margin: 0; color: rgba(255,255,255,0.8); font-size: 14px; text-transform: uppercase; letter-spacing: 2px;">Start at Table</p>
+          <p style="margin: 12px 0 0 0; font-size: 64px; font-weight: bold; color: #fff;">{{table_number}}</p>
         </div>
         {{round_assignments}}
-        <p>Enjoy the event!</p>
+        <p style="color: #666; margin-top: 24px;">Enjoy the event!</p>
       </div>
     `,
   },
@@ -486,6 +526,83 @@ export const sendCheckInConfirmation = action({
 })
 
 /**
+ * Send a test email to verify configuration
+ */
+export const sendTestEmail = action({
+  args: {
+    eventId: v.id("events"),
+    toEmail: v.string(),
+  },
+  handler: async (ctx, args): Promise<{ success: boolean; error?: string }> => {
+    const RESEND_API_KEY = process.env.RESEND_API_KEY
+    if (!RESEND_API_KEY) {
+      return { success: false, error: "RESEND_API_KEY is not configured" }
+    }
+
+    // Get event for settings
+    const event = await ctx.runQuery(internal.email.getEventForTestEmail, {
+      eventId: args.eventId,
+    })
+    if (!event) {
+      return { success: false, error: "Event not found" }
+    }
+
+    // Email settings
+    const senderName = event.emailSettings?.senderName || "Seatherder"
+    const senderEmail = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev"
+
+    try {
+      const response = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${RESEND_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          from: `${senderName} <${senderEmail}>`,
+          to: args.toEmail,
+          reply_to: event.emailSettings?.replyTo,
+          subject: `Test Email from ${event.name}`,
+          html: `
+            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+              <h1 style="color: #333;">Test Email</h1>
+              <p>This is a test email from <strong>${event.name}</strong>.</p>
+              <p>If you received this, your email configuration is working correctly.</p>
+              <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+              <p style="color: #666; font-size: 14px;">
+                <strong>Settings:</strong><br />
+                Sender: ${senderName}<br />
+                From: ${senderEmail}<br />
+                Reply-To: ${event.emailSettings?.replyTo || "(not set)"}
+              </p>
+            </div>
+          `,
+        }),
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        return { success: false, error: result.message || "Failed to send" }
+      }
+
+      return { success: true }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Unknown error"
+      return { success: false, error: errorMessage }
+    }
+  },
+})
+
+// Internal query to get event for test email
+export const getEventForTestEmail = internalQuery({
+  args: { eventId: v.id("events") },
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.eventId)
+  },
+})
+
+/**
  * Send bulk invitation emails to all guests in an event
  * Uses batching with delays to respect rate limits
  */
@@ -493,7 +610,7 @@ export const sendBulkInvitations = action({
   args: {
     eventId: v.id("events"),
     baseUrl: v.string(),
-    batchSize: v.optional(v.number()), // Default 10
+    batchSize: v.optional(v.number()), // Default 2 (Resend rate limit: 2/second)
     delayMs: v.optional(v.number()),   // Default 1000ms between batches
   },
   handler: async (ctx, args): Promise<{
@@ -517,7 +634,8 @@ export const sendBulkInvitations = action({
     }
 
     const { event, guests, attachments } = data
-    const batchSize = args.batchSize || 10
+    // Resend rate limit: 2 emails/second
+    const batchSize = args.batchSize || 2
     const delayMs = args.delayMs || 1000
 
     // Filter guests who haven't received invitations yet

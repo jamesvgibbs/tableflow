@@ -29,6 +29,8 @@ import {
   Maximize,
   Minimize,
   Pencil,
+  Mail,
+  UsersRound,
 } from 'lucide-react'
 import JSZip from 'jszip'
 
@@ -279,6 +281,16 @@ export default function LiveEventPage({ params }: PageProps) {
   // Edit guest state
   const [editingGuest, setEditingGuest] = React.useState<Doc<'guests'> | null>(null)
 
+  // Bulk check-in state
+  const [isBulkCheckingIn, setIsBulkCheckingIn] = React.useState(false)
+  const [showBulkCheckInDialog, setShowBulkCheckInDialog] = React.useState(false)
+  const [bulkCheckInResult, setBulkCheckInResult] = React.useState<{
+    total: number
+    checkedIn: number
+    alreadyCheckedIn: number
+    emailsScheduled: number
+  } | null>(null)
+
   // Load params on mount
   React.useEffect(() => {
     async function loadParams() {
@@ -319,6 +331,7 @@ export default function LiveEventPage({ params }: PageProps) {
   const checkInGuest = useMutation(api.guests.checkIn)
   const uncheckInGuest = useMutation(api.guests.uncheckIn)
   const updateGuest = useMutation(api.guests.update)
+  const bulkCheckIn = useMutation(api.guests.bulkCheckIn)
 
   // Sync event data with state when loaded
   React.useEffect(() => {
@@ -612,6 +625,31 @@ export default function LiveEventPage({ params }: PageProps) {
     },
     [editingGuest, updateGuest]
   )
+
+  // Handle bulk check-in
+  const handleBulkCheckIn = React.useCallback(async () => {
+    if (!eventId) return
+
+    setIsBulkCheckingIn(true)
+    setBulkCheckInResult(null)
+
+    try {
+      const result = await bulkCheckIn({ eventId })
+      setBulkCheckInResult(result)
+
+      if (result.checkedIn > 0) {
+        toast.success(`Checked in ${result.checkedIn} ${result.checkedIn === 1 ? 'guest' : 'guests'}. ${result.emailsScheduled} emails queued.`)
+      } else if (result.alreadyCheckedIn === result.total) {
+        toast.info('Everyone is already checked in.')
+      } else {
+        toast.info('No guests to check in.')
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to bulk check in')
+    } finally {
+      setIsBulkCheckingIn(false)
+    }
+  }, [eventId, bulkCheckIn])
 
   // Resolve theme colors
   const themeColors = event ? resolveThemeColors(event.themePreset, event.customColors) : undefined
@@ -1366,6 +1404,33 @@ export default function LiveEventPage({ params }: PageProps) {
                         }}
                       />
                     </div>
+
+                    {/* Bulk Actions */}
+                    <div
+                      className="mt-6 pt-4 flex flex-wrap items-center justify-center gap-3 border-t"
+                      style={themedStyles?.divider}
+                    >
+                      <Button
+                        onClick={() => setShowBulkCheckInDialog(true)}
+                        disabled={isBulkCheckingIn || checkInStats.checkedIn === checkInStats.total}
+                        className="gap-2 transition-colors"
+                        style={themedStyles
+                          ? hoveredButton === 'bulkCheckIn'
+                            ? themedStyles.primaryButtonHover
+                            : themedStyles.primaryButton
+                          : undefined
+                        }
+                        onMouseEnter={() => setHoveredButton('bulkCheckIn')}
+                        onMouseLeave={() => setHoveredButton(null)}
+                      >
+                        {isBulkCheckingIn ? (
+                          <Loader2 className="size-4 animate-spin" />
+                        ) : (
+                          <UsersRound className="size-4" />
+                        )}
+                        Bulk Check-in All
+                      </Button>
+                    </div>
                   </CardContent>
                 </Card>
 
@@ -1584,6 +1649,68 @@ export default function LiveEventPage({ params }: PageProps) {
                 seatingType={matchingConfig?.seatingType as 'wedding' | 'corporate' | 'networking' | 'team' | 'social' | 'custom' | null | undefined}
               />
             )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Bulk Check-in Confirmation Dialog */}
+        <Dialog open={showBulkCheckInDialog} onOpenChange={setShowBulkCheckInDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Bulk Check-in All {getGuestLabelPlural(event)}</DialogTitle>
+              <DialogDescription>
+                This will check in {checkInStats.total - checkInStats.checkedIn} {getGuestLabelPlural(event).toLowerCase()} who are still waiting and send them their table assignments via email.
+              </DialogDescription>
+            </DialogHeader>
+
+            {bulkCheckInResult && (
+              <div className="py-4 space-y-2">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="size-5 text-green-600" />
+                  <span>{bulkCheckInResult.checkedIn} newly checked in</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Mail className="size-5 text-blue-600" />
+                  <span>{bulkCheckInResult.emailsScheduled} emails queued</span>
+                </div>
+                {bulkCheckInResult.alreadyCheckedIn > 0 && (
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <UserCheck className="size-5" />
+                    <span>{bulkCheckInResult.alreadyCheckedIn} already checked in</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-3">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowBulkCheckInDialog(false)
+                  setBulkCheckInResult(null)
+                }}
+              >
+                {bulkCheckInResult ? 'Close' : 'Cancel'}
+              </Button>
+              {!bulkCheckInResult && (
+                <Button
+                  onClick={handleBulkCheckIn}
+                  disabled={isBulkCheckingIn}
+                  className="gap-2"
+                >
+                  {isBulkCheckingIn ? (
+                    <>
+                      <Loader2 className="size-4 animate-spin" />
+                      Checking in...
+                    </>
+                  ) : (
+                    <>
+                      <UsersRound className="size-4" />
+                      Check in All
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
           </DialogContent>
         </Dialog>
       </TooltipProvider>
