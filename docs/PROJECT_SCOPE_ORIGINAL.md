@@ -3,7 +3,7 @@
 Working document for planned features and improvements.
 
 **Target Market**: Conference planners (all-in on conferences)
-**Pricing**: $20/year annual subscription
+**Pricing**: $399/year annual subscription
 **Model**: One user account per company, guests don't need accounts
 
 ---
@@ -27,10 +27,12 @@ Replace hardcoded auth with real user accounts.
 
 #### 2. Clerk Billing
 
-Annual subscription at $20/year.
+Annual subscription at $399/year.
+Single Event at $49/event.
 
 - [ ] Configure Clerk Billing in dashboard
-- [ ] Create pricing plan: $20/year for 10 events
+- [ ] Create pricing plan: $399/year for 10 events
+- [ ] Create pricing plan: $49/event
 - [ ] Add free tier: 1 event, 50 guests
 - [ ] Implement billing portal access
 - [ ] Add subscription status checks to event creation
@@ -38,7 +40,7 @@ Annual subscription at $20/year.
 
 #### 3. Landing Page (The Fun Part - See Creative Brief Below)
 
-- [ ] Hero section with herding theme
+- [x] Hero section with herding theme
 - [ ] Problem/solution narrative
 - [ ] Feature showcase
 - [ ] Pricing section
@@ -63,8 +65,8 @@ Narrow search results based on when the search happens vs. event dates.
 
 - [ ] Add event date field to schema (start date, end date)
 - [ ] Update guest search to prioritize current/upcoming events
-- [ ] Hide or deprioritize past events in search results
-- [ ] Show "Event ended" indicator for past events
+- [ ] Hide past events in search results
+- [ ] Show "Event ended" indicator for past events within three days of event end date
 
 #### 6. Email Guests Their QR Codes
 
@@ -72,7 +74,7 @@ Let organizers send guests their seating info.
 
 - [ ] Integrate email service (Resend - you already use it for Pathible)
 - [ ] Design email template with QR code and seating details
-- [ ] Bulk send functionality
+- [x] Bulk send functionality
 - [ ] Track email delivery status
 
 #### 7. Onboarding Flow
@@ -205,19 +207,18 @@ Lean into the "herder" name HARD. Think: friendly border collie bringing order t
 
 ### Current Thinking
 
-- **Free**: 1 event, 100 guests (taste of the product)
-- **Pro**: $20/year, 10 events, unlimited guests
+- **Free**: 1 event, 50 guests (taste of the product)
+- **Pro**: $399/year, 10 events, unlimited guests
 
 ### Open Questions
 
 - Is 10 events right? Conference planners might do 2-4 big ones or 20 small ones.
-- Consider: $20/year unlimited events? (Convex is cheap, simplifies everything)
-- Or: $20/year for 5 events, $50/year unlimited?
+- Consider: $599/year unlimited events? (Convex is cheap, simplifies everything)
+- Or: $399/year for 10 events, $49/event?
 
-### Why $20 Works
+### Why $49 Works
 
 - Impulse buy territory (less than a conference lunch)
-- Annual = committed users, predictable revenue
 - Low enough that support burden stays low
 - Can always raise prices for new users later
 
@@ -250,8 +251,12 @@ subscriptionStatus: v.optional(v.string()), // 'free', 'active', 'expired'
 ## Questions to Resolve
 
 - [ ] Exact event limit for paid tier (10? unlimited?)
+  - per event limit to 200 guests
+  - carying cost per event roughly $20/Resend, $20/Vercel, $25/Convex
 - [ ] Do we need a "contact us" for enterprise/large conferences?
+  - If so, what is the threshold? (1000 guests?)
 - [ ] Support channel - just email? In-app chat?
+  - Consider adding a "Contact Us" form or button
 - [ ] Launch timeline target?
 
 ---
