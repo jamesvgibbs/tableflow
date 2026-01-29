@@ -3,6 +3,7 @@ import { mutation, query, QueryCtx, MutationCtx } from "./_generated/server"
 import { Id } from "./_generated/dataModel"
 import {
   calculateGuestCompatibility,
+  calculateDepartmentConcentrationPenalty,
   DEFAULT_WEIGHTS,
   type MatchingWeights,
 } from "./matching"
@@ -119,17 +120,19 @@ function calculateAssignmentScore(
 
   // Calculate compatibility with current table guests
   if (currentTableGuests.length > 0) {
-    // Department mixing
-    const hasSameDepartment = currentTableGuests.some(
-      (tg) => tg.department && tg.department === guest.department
+    // Department mixing - use concentration penalty for non-linear scaling
+    // This strongly discourages having many people from same department at one table
+    score += calculateDepartmentConcentrationPenalty(
+      guest.department,
+      currentTableGuests,
+      matchingWeights.departmentMix
     )
-    if (hasSameDepartment) {
-      score += matchingWeights.departmentMix
-    }
 
-    // Interest/attribute matching
+    // Interest/attribute matching (excludes department since we handle it above)
     const compatibilitySum = currentTableGuests.reduce((sum, tableGuest) => {
-      return sum + calculateGuestCompatibility(guest, tableGuest, matchingWeights)
+      // Calculate compatibility without department mixing (already handled)
+      const weightsWithoutDept = { ...matchingWeights, departmentMix: 0 }
+      return sum + calculateGuestCompatibility(guest, tableGuest, weightsWithoutDept)
     }, 0)
     // Invert: higher compatibility = lower score (better)
     score -= (compatibilitySum / currentTableGuests.length) * 2

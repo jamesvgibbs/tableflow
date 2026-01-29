@@ -3,6 +3,7 @@ import { mutation, query, QueryCtx, MutationCtx } from "./_generated/server"
 import { Id } from "./_generated/dataModel"
 import {
   calculateGuestCompatibility,
+  calculateDepartmentConcentrationPenalty,
   DEFAULT_WEIGHTS,
   type MatchingWeights,
 } from "./matching"
@@ -730,17 +731,27 @@ function calculateAssignmentScore(
     travelDistanceScore = Math.abs(tableNumber - previousTableNumber) * BASE_WEIGHTS.travelDistance
   }
 
-  // 3. Guest Compatibility Score - uses matching algorithm
+  // 3. Department Concentration Penalty - non-linear scaling
+  // Strongly discourages having many people from same department at one table
+  const departmentConcentrationScore = calculateDepartmentConcentrationPenalty(
+    guest.department,
+    currentTableGuests,
+    matchingWeights.departmentMix
+  )
+
+  // 4. Guest Compatibility Score - uses matching algorithm (excludes department since handled above)
   // Calculate average compatibility with current table guests
   // Higher compatibility = lower score (we're minimizing)
   let compatibilityScore = 0
   if (currentTableGuests.length > 0) {
+    // Use weights without department mixing since we handle it separately with concentration penalty
+    const weightsWithoutDept = { ...matchingWeights, departmentMix: 0 }
     let totalCompatibility = 0
     for (const tableGuest of currentTableGuests) {
       totalCompatibility += calculateGuestCompatibility(
         { department: guest.department, attributes: guest.attributes },
         { department: tableGuest.department, attributes: tableGuest.attributes },
-        matchingWeights
+        weightsWithoutDept
       )
     }
     // Average compatibility, inverted (higher compat = lower score)
@@ -749,9 +760,9 @@ function calculateAssignmentScore(
   }
 
   // Combine scores
-  // repeatTablemateScore, travelDistanceScore, and crossEventScore are penalties (higher = worse)
+  // repeatTablemateScore, travelDistanceScore, crossEventScore, and departmentConcentrationScore are penalties
   // compatibilityScore is inverted compatibility (lower = better compat)
-  return score + repeatTablemateScore + travelDistanceScore + compatibilityScore + crossEventScore
+  return score + repeatTablemateScore + travelDistanceScore + compatibilityScore + crossEventScore + departmentConcentrationScore
 }
 
 // Build tablemate history from previous rounds
