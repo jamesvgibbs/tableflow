@@ -4,6 +4,31 @@ Detailed task breakdown with acceptance criteria and e2e test requirements.
 
 ---
 
+## Progress Summary (Updated 2026-01-29)
+
+| Phase | Status | Notes |
+|-------|--------|-------|
+| **Phase 0**: Testing Infrastructure | ✅ Complete | Playwright configured, smoke tests passing |
+| **Phase 1**: Documentation | ✅ Complete | PROJECT_SCOPE updated |
+| **Phase 2**: Clerk Authentication | ⚠️ Partial | Code complete, requires Clerk dashboard config |
+| **Phase 3**: Multi-tenancy Validation | ⚠️ Partial | Depends on Phase 2 completion |
+| **Phase 4**: Guest Self-Service | ✅ Complete | Portal, deadline, notifications, email links |
+| **Phase 5**: Admin Bulk Operations | ✅ Complete | Bulk check-in, quick-add, status tracking |
+| **Phase 6**: Breakout Rooms/Sessions | ⚠️ Partial | Schema + rooms page done, sessions UI pending |
+| **Phase 7**: Algorithm Improvements | ⚠️ Partial | History tracking done, dept mixing analysis pending |
+| **Phase 8**: Onboarding | ⚠️ Partial | Welcome, tooltips, sample data done; quick-start pending |
+| **Phase 9**: Clerk Billing | 🔜 Deferred | Requires Clerk dashboard setup |
+| **Phase 10**: Legal Pages | ⚠️ Partial | Footer + cookie consent done; terms/privacy pages pending |
+
+### Remaining High-Priority Items
+1. **Clerk Dashboard Setup** (Tasks 2.1, 2.3) - Manual configuration required
+2. **Sessions UI Pages** (Tasks 6.5, 6.6) - `/event/[id]/sessions` not yet created
+3. **Terms & Privacy Pages** (Tasks 10.1, 10.2) - Legal content needed
+4. **Quick-Start Wizard** (Task 8.2) - Streamlined event creation
+5. **Novelty UI** (Task 7.4 partial) - Matching wizard integration
+
+---
+
 ## Phase 0: Testing Infrastructure
 
 ### Task 0.1: Set Up Playwright E2E Testing Framework
@@ -487,11 +512,11 @@ Detailed task breakdown with acceptance criteria and e2e test requirements.
 **Description**: Streamlined guest addition for walk-ins on event day.
 
 **Acceptance Criteria**:
-- [ ] "Quick Add" button visible on seating page
-- [ ] Modal with minimal fields: name only (required)
-- [ ] Optional fields collapsed by default: email, phone, dietary
-- [ ] Auto-assigns to table with available space (or unassigned)
-- [ ] Shows success toast with table assignment
+- [x] "Quick Add" button visible on live event page
+- [x] Modal with minimal fields: name only (required)
+- [x] Optional fields collapsed by default: email, phone, dietary
+- [x] Auto-assigns to table with available space (or unassigned)
+- [x] Shows success toast with table assignment
 
 **E2E Test**: `e2e/bulk-ops/quick-add.spec.ts`
 - Click "Quick Add"
@@ -500,11 +525,11 @@ Detailed task breakdown with acceptance criteria and e2e test requirements.
 - Verify guest appears in list
 - Verify assigned to a table
 
-**Files to Create**:
-- `src/components/quick-add-guest-modal.tsx`
+**Files Created**:
+- `src/components/quick-add-guest-modal.tsx` - DONE
 
-**Files to Modify**:
-- `src/app/(app)/event/[id]/seating/page.tsx` (add Quick Add button)
+**Files Modified**:
+- `src/app/(app)/event/[id]/live/page.tsx` (Quick Add integrated) - DONE
 
 ---
 
@@ -513,11 +538,11 @@ Detailed task breakdown with acceptance criteria and e2e test requirements.
 **Description**: Mark multiple guests as no-show or late arrival.
 
 **Acceptance Criteria**:
-- [ ] `guests` table has `status` field (present/no-show/late/none)
-- [ ] Bulk action: "Mark as No-Show"
-- [ ] Bulk action: "Mark as Late"
-- [ ] Status badges visible in guest list
-- [ ] Status filterable in guest list
+- [x] `guests` table has `status` field (present/no-show/late/none)
+- [x] Bulk action: "Mark as No-Show"
+- [x] Bulk action: "Mark as Late"
+- [x] Status badges visible in guest list
+- [ ] Status filterable in guest list *(Enhancement: add filter dropdown)*
 
 **E2E Test**: `e2e/bulk-ops/bulk-status.spec.ts`
 - Select 2 guests
@@ -525,10 +550,10 @@ Detailed task breakdown with acceptance criteria and e2e test requirements.
 - Verify status badges appear
 - Filter by no-show, see only those 2
 
-**Files to Modify**:
-- `convex/schema.ts` (add status field)
-- `convex/guests.ts` (add bulkUpdateStatus mutation)
-- `src/app/(app)/event/[id]/seating/page.tsx` (status UI)
+**Files Modified**:
+- `convex/schema.ts` (status field) - DONE
+- `convex/guests.ts` (bulkUpdateStatus mutation) - DONE
+- `src/app/(app)/event/[id]/live/page.tsx` (status UI in bulk action bar) - DONE
 
 ---
 
@@ -539,9 +564,9 @@ Detailed task breakdown with acceptance criteria and e2e test requirements.
 **Description**: Add rooms table for physical spaces.
 
 **Acceptance Criteria**:
-- [ ] `rooms` table created with fields: eventId, name, capacity, location
-- [ ] Index `by_event` for efficient queries
-- [ ] Basic CRUD mutations for rooms
+- [x] `rooms` table created with fields: eventId, name, capacity, location, description
+- [x] Index `by_event` for efficient queries
+- [x] Basic CRUD mutations for rooms
 
 **E2E Test**: `e2e/breakout/rooms-crud.spec.ts`
 - Create room
@@ -549,9 +574,9 @@ Detailed task breakdown with acceptance criteria and e2e test requirements.
 - Delete room
 - List rooms for event
 
-**Files to Modify**:
-- `convex/schema.ts` (add rooms table)
-- Create: `convex/rooms.ts`
+**Files Modified**:
+- `convex/schema.ts` (rooms table) - DONE
+- `convex/rooms.ts` - DONE
 
 ---
 
@@ -560,10 +585,11 @@ Detailed task breakdown with acceptance criteria and e2e test requirements.
 **Description**: Add sessions table for workshop tracks.
 
 **Acceptance Criteria**:
-- [ ] `sessions` table created with fields: eventId, name, startTime, endTime, roomId, hasTableSeating, description
-- [ ] Index `by_event` for efficient queries
-- [ ] Sessions can optionally be assigned to rooms
-- [ ] Sessions can optionally have table seating
+- [x] `sessions` table created with fields: eventId, name, startTime, endTime, roomId, hasTableSeating, description, maxCapacity
+- [x] Index `by_event` for efficient queries
+- [x] Index `by_room` for room lookups
+- [x] Sessions can optionally be assigned to rooms
+- [x] Sessions can optionally have table seating
 
 **E2E Test**: `e2e/breakout/sessions-crud.spec.ts`
 - Create session
@@ -571,9 +597,9 @@ Detailed task breakdown with acceptance criteria and e2e test requirements.
 - Edit session times
 - Delete session
 
-**Files to Modify**:
-- `convex/schema.ts` (add sessions table)
-- Create: `convex/sessions.ts`
+**Files Modified**:
+- `convex/schema.ts` (sessions table) - DONE
+- `convex/sessions.ts` - DONE
 
 ---
 
@@ -582,9 +608,9 @@ Detailed task breakdown with acceptance criteria and e2e test requirements.
 **Description**: Junction table for guest-session assignments.
 
 **Acceptance Criteria**:
-- [ ] `sessionAssignments` table created with fields: sessionId, guestId
-- [ ] Indexes: by_session, by_guest
-- [ ] Mutations for assigning/unassigning guests to sessions
+- [x] `sessionAssignments` table created with fields: sessionId, guestId, eventId
+- [x] Indexes: by_session, by_guest, by_event
+- [x] Mutations for assigning/unassigning guests to sessions
 
 **E2E Test**: `e2e/breakout/session-assignments.spec.ts`
 - Assign guest to session
@@ -592,9 +618,9 @@ Detailed task breakdown with acceptance criteria and e2e test requirements.
 - List guests in session
 - List sessions for guest
 
-**Files to Modify**:
-- `convex/schema.ts` (add sessionAssignments table)
-- `convex/sessions.ts` (add assignment mutations)
+**Files Modified**:
+- `convex/schema.ts` (sessionAssignments table) - DONE
+- `convex/sessions.ts` (assignment mutations) - DONE
 
 ---
 
@@ -603,12 +629,12 @@ Detailed task breakdown with acceptance criteria and e2e test requirements.
 **Description**: UI for managing event rooms.
 
 **Acceptance Criteria**:
-- [ ] Route: `/event/[id]/rooms`
-- [ ] List all rooms for event
-- [ ] Add room form (name, capacity, location)
-- [ ] Edit room inline
-- [ ] Delete room with confirmation
-- [ ] Shows which sessions use each room
+- [x] Route: `/event/[id]/rooms`
+- [x] List all rooms for event
+- [x] Add room form (name, capacity, location)
+- [x] Edit room inline
+- [x] Delete room with confirmation
+- [x] Shows which sessions use each room
 
 **E2E Test**: `e2e/breakout/rooms-page.spec.ts`
 - Navigate to rooms page
@@ -617,8 +643,8 @@ Detailed task breakdown with acceptance criteria and e2e test requirements.
 - Delete room
 - Verify list updates
 
-**Files to Create**:
-- `src/app/(app)/event/[id]/rooms/page.tsx`
+**Files Created**:
+- `src/app/(app)/event/[id]/rooms/page.tsx` - DONE
 
 ---
 
@@ -626,8 +652,10 @@ Detailed task breakdown with acceptance criteria and e2e test requirements.
 
 **Description**: UI for managing event sessions.
 
+**Status**: ⚠️ PARTIAL - Schema and mutations exist, UI page needs implementation
+
 **Acceptance Criteria**:
-- [ ] Route: `/event/[id]/sessions`
+- [ ] Route: `/event/[id]/sessions` *(Page file not yet created)*
 - [ ] List all sessions for event
 - [ ] Add session form (name, start/end time, room dropdown, has seating toggle)
 - [ ] Edit session inline
@@ -642,7 +670,7 @@ Detailed task breakdown with acceptance criteria and e2e test requirements.
 - Delete session
 
 **Files to Create**:
-- `src/app/(app)/event/[id]/sessions/page.tsx`
+- `src/app/(app)/event/[id]/sessions/page.tsx` *(NOT YET CREATED)*
 - `src/components/session-timeline.tsx`
 
 ---
@@ -651,8 +679,10 @@ Detailed task breakdown with acceptance criteria and e2e test requirements.
 
 **Description**: Assign guests to sessions.
 
+**Status**: ⚠️ PARTIAL - Schema and mutations exist, UI page needs implementation
+
 **Acceptance Criteria**:
-- [ ] Session detail page shows assigned guests
+- [ ] Session detail page shows assigned guests *(Page file not yet created)*
 - [ ] "Add Guests" opens picker with unassigned guests
 - [ ] Bulk assignment (select multiple guests)
 - [ ] Remove guest from session
@@ -665,7 +695,7 @@ Detailed task breakdown with acceptance criteria and e2e test requirements.
 - Verify count updates
 
 **Files to Create**:
-- `src/app/(app)/event/[id]/sessions/[sessionId]/page.tsx`
+- `src/app/(app)/event/[id]/sessions/[sessionId]/page.tsx` *(NOT YET CREATED)*
 
 ---
 
@@ -674,10 +704,10 @@ Detailed task breakdown with acceptance criteria and e2e test requirements.
 **Description**: Add rooms and sessions to event navigation.
 
 **Acceptance Criteria**:
-- [ ] Event hub shows "Rooms" link
-- [ ] Event hub shows "Sessions" link
-- [ ] Breadcrumb navigation works
-- [ ] Mobile navigation includes new sections
+- [x] Event hub shows "Rooms" link
+- [x] Event hub shows "Sessions" link
+- [ ] Breadcrumb navigation works *(Not yet implemented)*
+- [ ] Mobile navigation includes new sections *(Not yet verified)*
 
 **E2E Test**: `e2e/breakout/navigation.spec.ts`
 - From event hub, click Rooms
@@ -686,9 +716,8 @@ Detailed task breakdown with acceptance criteria and e2e test requirements.
 - Verify page loads
 - Breadcrumbs work correctly
 
-**Files to Modify**:
-- `src/app/(app)/event/[id]/page.tsx` (add nav links)
-- `src/components/event-nav.tsx` (if exists, add links)
+**Files Modified**:
+- `src/app/(app)/event/[id]/page.tsx` (add nav links) - DONE
 
 ---
 
@@ -699,14 +728,16 @@ Detailed task breakdown with acceptance criteria and e2e test requirements.
 **Description**: Track who sat together at previous events.
 
 **Acceptance Criteria**:
-- [ ] `seatingHistory` table with: organizerId, guestEmail, partnerEmail, eventId, roundNumber, timestamp
-- [ ] Index: by_organizer_guest for efficient lookups
-- [ ] Guest email used as identifier (works across events)
+- [x] `seatingHistory` table with: organizerId, guestEmail, partnerEmail, eventId, roundNumber, timestamp
+- [x] Index: by_organizer_guest for efficient lookups
+- [x] Index: by_organizer_pair for efficient pair lookups
+- [x] Index: by_event for event-scoped queries
+- [x] Guest email used as identifier (works across events)
 
 **E2E Test**: Covered by later tasks
 
-**Files to Modify**:
-- `convex/schema.ts` (add seatingHistory table)
+**Files Modified**:
+- `convex/schema.ts` (add seatingHistory table) - DONE
 
 ---
 
@@ -715,10 +746,10 @@ Detailed task breakdown with acceptance criteria and e2e test requirements.
 **Description**: Record seating history when assignments are committed.
 
 **Acceptance Criteria**:
-- [ ] When `commitPreview` is called, record all tablemate pairs
-- [ ] When `assignTables` is called, record all tablemate pairs
-- [ ] History includes all rounds
-- [ ] Deduplication: A-B same as B-A, store once
+- [x] When `commitPreview` is called, record all tablemate pairs
+- [x] When `assignTables` is called, record all tablemate pairs
+- [x] History includes all rounds
+- [x] Deduplication: A-B same as B-A, store once (canonical pair ordering)
 
 **E2E Test**: `e2e/algorithm/history-recording.spec.ts`
 - Create event with 8 guests
@@ -726,10 +757,16 @@ Detailed task breakdown with acceptance criteria and e2e test requirements.
 - Verify seating history records created
 - Check both directions of pair recorded
 
-**Files to Modify**:
-- `convex/events.ts` (add history recording to assignTables)
-- `convex/preview.ts` (add history recording to commitPreview)
-- Create: `convex/seatingHistory.ts` (helper functions)
+**Files Modified**:
+- `convex/events.ts` (add history recording to assignTables) - DONE
+- `convex/preview.ts` (add history recording to commitPreview) - DONE
+- Created: `convex/seatingHistory.ts` (helper functions) - DONE
+  - `recordPair()` - Single pair recording
+  - `recordTableAssignments()` - Bulk recording from table assignments
+  - `getHistoryBetweenGuests()` - Query history for a pair
+  - `getGuestHistory()` - Get all past tablemates for a guest
+  - `clearEventHistory()` - Remove history for re-running
+  - `getPairSatTogetherCount()` - For matching algorithm scoring
 
 ---
 
@@ -738,10 +775,10 @@ Detailed task breakdown with acceptance criteria and e2e test requirements.
 **Description**: Factor past tablemates into compatibility scoring.
 
 **Acceptance Criteria**:
-- [ ] Matching algorithm queries seating history for guest pair
-- [ ] Recently sat together = penalty in score
-- [ ] Configurable: how many past events to consider
-- [ ] Configurable: how strong the penalty
+- [x] Matching algorithm queries seating history for guest pair
+- [x] Recently sat together = penalty in score
+- [x] Configurable: how many past events to consider (`maxEvents` parameter)
+- [x] Configurable: how strong the penalty (`noveltyPreference` weight)
 
 **E2E Test**: `e2e/algorithm/history-scoring.spec.ts`
 - Create first event, assign tables, commit
@@ -749,8 +786,13 @@ Detailed task breakdown with acceptance criteria and e2e test requirements.
 - Verify algorithm avoids previous tablemates
 - Compare with/without history consideration
 
-**Files to Modify**:
-- `convex/matching.ts` (add history lookup and scoring)
+**Files Modified**:
+- `convex/seatingHistory.ts` - DONE
+  - `getPairSatTogetherCount()` with `maxEvents` parameter
+- `convex/events.ts` - DONE
+  - Integrated cross-event history into `calculateCompatibilityScore()`
+- `convex/preview.ts` - DONE
+  - Integrated cross-event history into scoring
 
 ---
 
@@ -759,19 +801,25 @@ Detailed task breakdown with acceptance criteria and e2e test requirements.
 **Description**: Add configurable weight for preferring new connections.
 
 **Acceptance Criteria**:
-- [ ] `matchingConfig` has `noveltyPreference` weight (0-1)
-- [ ] 0 = ignore history, 1 = strongly prefer new connections
-- [ ] Default value: 0.5
-- [ ] Matching wizard includes novelty question
-- [ ] Human-readable explanation in config summary
+- [x] `matchingConfig` has `noveltyPreference` weight (0-1)
+- [x] 0 = ignore history, 1 = strongly prefer new connections
+- [x] Default value: 0.5
+- [ ] Matching wizard includes novelty question *(UI integration pending)*
+- [ ] Human-readable explanation in config summary *(UI integration pending)*
 
 **E2E Test**: `e2e/algorithm/novelty-weight.spec.ts`
 - Set novelty to 0, verify repeat tablemates allowed
 - Set novelty to 1, verify repeat tablemates avoided
 
-**Files to Modify**:
-- `convex/schema.ts` (add noveltyPreference to matchingConfig)
-- `convex/matching.ts` (use novelty weight)
+**Files Modified**:
+- `convex/schema.ts` - DONE (noveltyPreference field added to matchingConfig)
+- `convex/matchingConfig.ts` - DONE
+  - `updateNoveltyPreference()` mutation added
+  - `saveMatchingConfig()` includes noveltyPreference
+- `convex/events.ts` - DONE (noveltyPreference used in scoring)
+- `convex/preview.ts` - DONE (noveltyPreference used in scoring)
+
+**Files to Modify** (UI integration):
 - `src/app/(app)/event/[id]/matching/page.tsx` (add novelty question)
 - `src/lib/config-mapper.ts` (map novelty answer to weight)
 
@@ -805,21 +853,21 @@ Detailed task breakdown with acceptance criteria and e2e test requirements.
 **Description**: First-time user welcome after sign-up.
 
 **Acceptance Criteria**:
-- [ ] Detect first-time user (no events)
-- [ ] Show welcome modal/page with Seatherder persona
-- [ ] Explain what the app does in border collie voice
-- [ ] Clear CTA to create first event
+- [x] Detect first-time user (no events)
+- [x] Show welcome modal/page with Seatherder persona
+- [x] Explain what the app does in border collie voice
+- [x] Clear CTA to create first event
 
 **E2E Test**: `e2e/onboarding/welcome.spec.ts`
 - New user signs up
 - Welcome screen appears
 - Click "Create Event" goes to event creation
 
-**Files to Create**:
-- `src/components/welcome-modal.tsx`
+**Files Created**:
+- `src/components/welcome-modal.tsx` - DONE
 
-**Files to Modify**:
-- `src/app/(app)/admin/page.tsx` (show welcome for new users)
+**Files Modified**:
+- `src/app/(app)/admin/page.tsx` (show welcome for new users) - DONE
 
 ---
 
@@ -850,11 +898,11 @@ Detailed task breakdown with acceptance criteria and e2e test requirements.
 **Description**: "Try with demo guests" to explore features.
 
 **Acceptance Criteria**:
-- [ ] "Add sample guests" button on empty event
-- [ ] Generates 20-30 realistic demo guests
-- [ ] Includes variety: departments, interests, dietary restrictions
-- [ ] Clear indication this is demo data
-- [ ] Easy to clear demo data
+- [x] "Add sample guests" button on empty event
+- [x] Generates 20-30 realistic demo guests (24 by default)
+- [x] Includes variety: departments, interests, dietary restrictions
+- [x] Clear indication this is demo data (tagged with 'demo' in customTags)
+- [x] Easy to clear demo data ("Clear Demo" button)
 
 **E2E Test**: `e2e/onboarding/sample-data.spec.ts`
 - Create new event
@@ -863,11 +911,17 @@ Detailed task breakdown with acceptance criteria and e2e test requirements.
 - Clear demo data
 - Verify guests removed
 
-**Files to Create**:
-- `src/lib/sample-data.ts` (demo guest generator)
+**Files Created**:
+- `src/lib/sample-data.ts` (demo guest generator) - DONE
+  - `generateSampleGuests(count)` - Creates realistic demo data
+  - Balanced department distribution
+  - Variety of interests, dietary restrictions, job levels
 
-**Files to Modify**:
-- `convex/guests.ts` (add sample data mutation)
+**Files Modified**:
+- `convex/guests.ts` - DONE
+  - `addSampleGuests()` mutation
+  - `removeSampleGuests()` mutation
+- `src/app/(app)/event/[id]/page.tsx` - DONE (UI integration)
 
 ---
 
@@ -876,11 +930,11 @@ Detailed task breakdown with acceptance criteria and e2e test requirements.
 **Description**: Contextual help for key features.
 
 **Acceptance Criteria**:
-- [ ] Tooltip component created
-- [ ] Help icons next to complex features
-- [ ] Tooltips explain feature in border collie voice
-- [ ] Tooltips dismissible, remember dismissed state
-- [ ] Key features covered: matching wizard, constraints, multi-round
+- [x] Tooltip component created
+- [x] Help icons next to complex features (HelpCircle icon)
+- [x] Tooltips explain feature in border collie voice
+- [x] Tooltips dismissible, remember dismissed state (localStorage)
+- [x] Key features covered: matching wizard, constraints, multi-round, guest features, QR check-in
 
 **E2E Test**: `e2e/onboarding/tooltips.spec.ts`
 - Navigate to matching wizard
@@ -888,8 +942,13 @@ Detailed task breakdown with acceptance criteria and e2e test requirements.
 - Dismiss tooltip
 - Reload page, tooltip stays dismissed
 
-**Files to Create**:
-- `src/components/feature-tooltip.tsx`
+**Files Created**:
+- `src/components/feature-tooltip.tsx` - DONE
+  - `FeatureTooltip` component with 15+ feature definitions
+  - `InlineHelp` component for inline text with tooltip
+  - `useFeatureTooltip` hook for managing dismissed state
+  - `resetAllFeatureTooltips()` utility for testing
+- `src/components/ui/popover.tsx` - DONE (shadcn/ui dependency)
 
 ---
 
@@ -1002,12 +1061,14 @@ Detailed task breakdown with acceptance criteria and e2e test requirements.
 
 **Description**: Create Terms of Service page.
 
+**Status**: ⚠️ NOT STARTED - Page needs to be created
+
 **Acceptance Criteria**:
 - [ ] Route: `/terms`
 - [ ] Content adapted from Pathible template
 - [ ] Event-management specific terms
 - [ ] Last updated date
-- [ ] Accessible from footer
+- [ ] Accessible from footer (footer link exists, page missing)
 
 **E2E Test**: `e2e/legal/terms.spec.ts`
 - Navigate to /terms
@@ -1015,13 +1076,15 @@ Detailed task breakdown with acceptance criteria and e2e test requirements.
 - Verify footer link works
 
 **Files to Create**:
-- `src/app/(public)/terms/page.tsx`
+- `src/app/(public)/terms/page.tsx` *(NOT YET CREATED)*
 
 ---
 
 ### Task 10.2: Privacy Policy
 
 **Description**: Create Privacy Policy page.
+
+**Status**: ⚠️ NOT STARTED - Page needs to be created
 
 **Acceptance Criteria**:
 - [ ] Route: `/privacy`
@@ -1036,7 +1099,7 @@ Detailed task breakdown with acceptance criteria and e2e test requirements.
 - Verify footer link works
 
 **Files to Create**:
-- `src/app/(public)/privacy/page.tsx`
+- `src/app/(public)/privacy/page.tsx` *(NOT YET CREATED)*
 
 ---
 
@@ -1045,10 +1108,10 @@ Detailed task breakdown with acceptance criteria and e2e test requirements.
 **Description**: Add legal links to site footer.
 
 **Acceptance Criteria**:
-- [ ] Footer component exists or created
-- [ ] Links to /terms and /privacy
-- [ ] Visible on all pages
-- [ ] Mobile-friendly layout
+- [x] Footer component exists or created
+- [x] Links to /terms and /privacy
+- [x] Visible on marketing pages
+- [x] Mobile-friendly layout
 
 **E2E Test**: `e2e/legal/footer.spec.ts`
 - Load any page
@@ -1056,9 +1119,9 @@ Detailed task breakdown with acceptance criteria and e2e test requirements.
 - Click Terms link
 - Click Privacy link
 
-**Files to Create/Modify**:
-- Create or modify: `src/components/footer.tsx`
-- Modify layouts to include footer
+**Files Created/Modified**:
+- Created: `src/components/footer.tsx` - DONE
+- Modified: `src/app/(marketing)/layout.tsx` - DONE (includes Footer)
 
 ---
 
@@ -1067,11 +1130,11 @@ Detailed task breakdown with acceptance criteria and e2e test requirements.
 **Description**: GDPR-compliant cookie consent.
 
 **Acceptance Criteria**:
-- [ ] Banner appears for new visitors
-- [ ] Clear explanation of cookie usage
-- [ ] Accept/Decline buttons
-- [ ] Preference saved in cookie/localStorage
-- [ ] Banner doesn't appear after choice made
+- [x] Banner appears for new visitors (after 1s delay)
+- [x] Clear explanation of cookie usage
+- [x] Accept/Decline buttons
+- [x] Preference saved in localStorage (`seatherder_cookie_consent`)
+- [x] Banner doesn't appear after choice made
 
 **E2E Test**: `e2e/legal/cookie-consent.spec.ts`
 - New visitor sees banner
@@ -1079,8 +1142,13 @@ Detailed task breakdown with acceptance criteria and e2e test requirements.
 - Reload, banner gone
 - Clear storage, banner reappears
 
-**Files to Create**:
-- `src/components/cookie-consent.tsx`
+**Files Created**:
+- `src/components/cookie-consent.tsx` - DONE
+  - `CookieConsent` component with GDPR-compliant UI
+  - `useCookieConsent` hook for checking consent status elsewhere
+
+**Files Modified**:
+- `src/app/layout.tsx` - DONE (includes CookieConsent component)
 
 ---
 
