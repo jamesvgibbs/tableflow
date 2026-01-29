@@ -1,6 +1,38 @@
 import { v } from "convex/values"
-import { query, mutation } from "./_generated/server"
+import { query, mutation, QueryCtx, MutationCtx } from "./_generated/server"
 import { DEFAULT_WEIGHTS } from "./matching"
+import type { Id } from "./_generated/dataModel"
+
+// =============================================================================
+// Authentication Helpers
+// =============================================================================
+
+/**
+ * Get the authenticated user's ID from Clerk.
+ * Returns null if not authenticated.
+ */
+async function getAuthenticatedUserId(ctx: QueryCtx | MutationCtx): Promise<string | null> {
+  const identity = await ctx.auth.getUserIdentity()
+  return identity?.subject ?? null
+}
+
+/**
+ * Verify the current user owns an event.
+ * During migration, events without userId are accessible (backward compatibility).
+ */
+async function verifyEventOwnership(
+  ctx: QueryCtx | MutationCtx,
+  eventId: Id<"events">,
+  userId: string | null
+): Promise<void> {
+  const event = await ctx.db.get(eventId)
+  if (!event) {
+    throw new Error("Event not found")
+  }
+  if (event.userId && event.userId !== userId) {
+    throw new Error("Access denied: you do not own this event")
+  }
+}
 
 /**
  * Validator for matching weights object
@@ -26,12 +58,15 @@ const seatingTypeValidator = v.union(
 )
 
 /**
- * Get matching config for an event
+ * Get matching config for an event (with ownership check)
  * Returns null if not configured (will use defaults)
  */
 export const getByEvent = query({
   args: { eventId: v.id("events") },
   handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.eventId, userId)
+
     const config = await ctx.db
       .query("matchingConfig")
       .withIndex("by_event", (q) => q.eq("eventId", args.eventId))
@@ -42,12 +77,15 @@ export const getByEvent = query({
 })
 
 /**
- * Get matching config with defaults filled in
+ * Get matching config with defaults filled in (with ownership check)
  * Always returns a complete config object
  */
 export const getByEventWithDefaults = query({
   args: { eventId: v.id("events") },
   handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.eventId, userId)
+
     const config = await ctx.db
       .query("matchingConfig")
       .withIndex("by_event", (q) => q.eq("eventId", args.eventId))
@@ -75,7 +113,7 @@ export const getByEventWithDefaults = query({
 })
 
 /**
- * Create or update matching config for an event
+ * Create or update matching config for an event (with ownership check)
  */
 export const upsert = mutation({
   args: {
@@ -85,11 +123,8 @@ export const upsert = mutation({
     goalOptions: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
-    // Check if event exists
-    const event = await ctx.db.get(args.eventId)
-    if (!event) {
-      throw new Error("Event not found")
-    }
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.eventId, userId)
 
     // Look for existing config
     const existing = await ctx.db
@@ -122,7 +157,7 @@ export const upsert = mutation({
 })
 
 /**
- * Update just the weights for an event
+ * Update just the weights for an event (with ownership check)
  */
 export const updateWeights = mutation({
   args: {
@@ -130,11 +165,8 @@ export const updateWeights = mutation({
     weights: weightsValidator,
   },
   handler: async (ctx, args) => {
-    // Check if event exists
-    const event = await ctx.db.get(args.eventId)
-    if (!event) {
-      throw new Error("Event not found")
-    }
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.eventId, userId)
 
     // Look for existing config
     const existing = await ctx.db
@@ -162,7 +194,7 @@ export const updateWeights = mutation({
 })
 
 /**
- * Update custom interest options for an event
+ * Update custom interest options for an event (with ownership check)
  */
 export const updateInterestOptions = mutation({
   args: {
@@ -170,6 +202,9 @@ export const updateInterestOptions = mutation({
     interestOptions: v.array(v.string()),
   },
   handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.eventId, userId)
+
     const existing = await ctx.db
       .query("matchingConfig")
       .withIndex("by_event", (q) => q.eq("eventId", args.eventId))
@@ -196,7 +231,7 @@ export const updateInterestOptions = mutation({
 })
 
 /**
- * Update custom goal options for an event
+ * Update custom goal options for an event (with ownership check)
  */
 export const updateGoalOptions = mutation({
   args: {
@@ -204,6 +239,9 @@ export const updateGoalOptions = mutation({
     goalOptions: v.array(v.string()),
   },
   handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.eventId, userId)
+
     const existing = await ctx.db
       .query("matchingConfig")
       .withIndex("by_event", (q) => q.eq("eventId", args.eventId))
@@ -230,11 +268,14 @@ export const updateGoalOptions = mutation({
 })
 
 /**
- * Delete matching config for an event (reset to defaults)
+ * Delete matching config for an event (reset to defaults) (with ownership check)
  */
 export const remove = mutation({
   args: { eventId: v.id("events") },
   handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.eventId, userId)
+
     const existing = await ctx.db
       .query("matchingConfig")
       .withIndex("by_event", (q) => q.eq("eventId", args.eventId))
@@ -247,7 +288,7 @@ export const remove = mutation({
 })
 
 /**
- * Apply a preset to an event's matching config
+ * Apply a preset to an event's matching config (with ownership check)
  */
 export const applyPreset = mutation({
   args: {
@@ -260,6 +301,9 @@ export const applyPreset = mutation({
     ),
   },
   handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.eventId, userId)
+
     // Preset weights defined here to match frontend
     const presetWeights: Record<string, typeof DEFAULT_WEIGHTS> = {
       balanced: DEFAULT_WEIGHTS,
@@ -315,7 +359,7 @@ export const applyPreset = mutation({
 })
 
 /**
- * Save seating wizard configuration
+ * Save seating wizard configuration (with ownership check)
  * This is the new approach - users answer questions, we derive weights
  */
 export const saveSeatingConfig = mutation({
@@ -326,9 +370,13 @@ export const saveSeatingConfig = mutation({
     weights: weightsValidator,
     numberOfRounds: v.optional(v.number()),
     vipTables: v.optional(v.array(v.number())),
+    noveltyPreference: v.optional(v.number()), // 0-1 for cross-event history preference
   },
   handler: async (ctx, args) => {
-    // Check if event exists
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.eventId, userId)
+
+    // Get event for additional operations
     const event = await ctx.db.get(args.eventId)
     if (!event) {
       throw new Error("Event not found")
@@ -356,6 +404,7 @@ export const saveSeatingConfig = mutation({
         answers: args.answers,
         weights: args.weights,
         vipTables: args.vipTables,
+        noveltyPreference: args.noveltyPreference,
         updatedAt: now,
       })
       return existing._id
@@ -367,6 +416,7 @@ export const saveSeatingConfig = mutation({
         answers: args.answers,
         weights: args.weights,
         vipTables: args.vipTables,
+        noveltyPreference: args.noveltyPreference,
         updatedAt: now,
       })
     }
@@ -374,7 +424,51 @@ export const saveSeatingConfig = mutation({
 })
 
 /**
- * Update VIP tables for an event
+ * Update novelty preference for cross-event history scoring (with ownership check)
+ * Value should be 0-1 where:
+ *   0 = ignore seating history from past events
+ *   0.5 = balanced (default)
+ *   1 = strongly prefer new connections (avoid past tablemates)
+ */
+export const updateNoveltyPreference = mutation({
+  args: {
+    eventId: v.id("events"),
+    noveltyPreference: v.number(), // 0-1
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.eventId, userId)
+
+    // Clamp to valid range
+    const noveltyPreference = Math.max(0, Math.min(1, args.noveltyPreference))
+
+    const existing = await ctx.db
+      .query("matchingConfig")
+      .withIndex("by_event", (q) => q.eq("eventId", args.eventId))
+      .unique()
+
+    const now = new Date().toISOString()
+
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        noveltyPreference,
+        updatedAt: now,
+      })
+      return existing._id
+    } else {
+      // Create new with just novelty preference and default weights
+      return await ctx.db.insert("matchingConfig", {
+        eventId: args.eventId,
+        weights: DEFAULT_WEIGHTS,
+        noveltyPreference,
+        updatedAt: now,
+      })
+    }
+  },
+})
+
+/**
+ * Update VIP tables for an event (with ownership check)
  */
 export const updateVipTables = mutation({
   args: {
@@ -382,6 +476,9 @@ export const updateVipTables = mutation({
     vipTables: v.array(v.number()),
   },
   handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.eventId, userId)
+
     const existing = await ctx.db
       .query("matchingConfig")
       .withIndex("by_event", (q) => q.eq("eventId", args.eventId))
