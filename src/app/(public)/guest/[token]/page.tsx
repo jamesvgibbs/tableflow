@@ -1,5 +1,6 @@
 "use client"
 
+import { useMemo } from "react"
 import { useParams } from "next/navigation"
 import { useQuery } from "convex/react"
 import { api } from "@convex/_generated/api"
@@ -15,6 +16,10 @@ export default function GuestPortalPage() {
   const token = params.token as string
 
   const data = useQuery(api.guests.getBySelfServiceToken, { token })
+
+  // Memoize current time to avoid Date.now() during render
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const now = useMemo(() => Date.now(), [])
 
   // Loading state
   if (data === undefined) {
@@ -44,12 +49,12 @@ export default function GuestPortalPage() {
 
   // Check if deadline has passed
   const isDeadlinePassed = event.selfServiceDeadline
-    ? new Date() > new Date(event.selfServiceDeadline)
+    ? now > new Date(event.selfServiceDeadline).getTime()
     : false
 
   // Check if deadline is approaching (within 24 hours)
   const isDeadlineApproaching = event.selfServiceDeadline
-    ? !isDeadlinePassed && new Date(event.selfServiceDeadline).getTime() - Date.now() < 24 * 60 * 60 * 1000
+    ? !isDeadlinePassed && new Date(event.selfServiceDeadline).getTime() - now < 24 * 60 * 60 * 1000
     : false
 
   // Format deadline for display

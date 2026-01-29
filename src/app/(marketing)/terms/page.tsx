@@ -27,7 +27,7 @@ export default function TermsPage() {
 
           <h2>1. Agreement to Terms</h2>
           <p>
-            By accessing or using Seatherder ("the Service"), you agree to be bound by these
+            By accessing or using Seatherder (&quot;the Service&quot;), you agree to be bound by these
             Terms of Service. If you do not agree to these terms, please do not use the Service.
           </p>
 
@@ -102,7 +102,7 @@ export default function TermsPage() {
 
           <h2>8. Disclaimer of Warranties</h2>
           <p>
-            THE SERVICE IS PROVIDED "AS IS" WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR
+            THE SERVICE IS PROVIDED &quot;AS IS&quot; WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR
             IMPLIED. WE DO NOT GUARANTEE THAT THE SERVICE WILL BE UNINTERRUPTED, SECURE, OR
             ERROR-FREE.
           </p>

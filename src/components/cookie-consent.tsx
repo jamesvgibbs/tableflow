@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useSyncExternalStore } from 'react'
 import Link from 'next/link'
 import { Cookie, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -11,32 +11,57 @@ const COOKIE_CONSENT_KEY = 'seatherder_cookie_consent'
 
 type ConsentValue = 'accepted' | 'declined' | null
 
+// Use useSyncExternalStore to read from localStorage without triggering cascading renders
+function subscribeToStorage(callback: () => void) {
+  window.addEventListener('storage', callback)
+  return () => window.removeEventListener('storage', callback)
+}
+
+function getStoredConsentSnapshot(): ConsentValue {
+  if (typeof window === 'undefined') return null
+  const stored = localStorage.getItem(COOKIE_CONSENT_KEY)
+  if (stored === 'accepted' || stored === 'declined') return stored
+  return null
+}
+
+function getServerSnapshot(): ConsentValue {
+  return null
+}
+
 export function CookieConsent() {
-  const [consent, setConsent] = useState<ConsentValue>(null)
+  // Use useSyncExternalStore for localStorage - avoids setState in effect
+  const storedConsent = useSyncExternalStore(
+    subscribeToStorage,
+    getStoredConsentSnapshot,
+    getServerSnapshot
+  )
+
   const [isVisible, setIsVisible] = useState(false)
   const [isAnimatingOut, setIsAnimatingOut] = useState(false)
+  const [localConsent, setLocalConsent] = useState<ConsentValue>(null)
 
+  // Show banner after delay if no consent stored
   useEffect(() => {
-    // Check localStorage for existing consent
-    const storedConsent = localStorage.getItem(COOKIE_CONSENT_KEY)
-    if (storedConsent === 'accepted' || storedConsent === 'declined') {
-      setConsent(storedConsent)
-    } else {
-      // No consent stored, show the banner after a brief delay
+    if (storedConsent === null && localConsent === null) {
       const timer = setTimeout(() => {
         setIsVisible(true)
       }, 1000)
       return () => clearTimeout(timer)
     }
-  }, [])
+  }, [storedConsent, localConsent])
+
+  // Derive actual consent from stored or local state
+  const consent = localConsent ?? storedConsent
 
   const handleConsent = (value: 'accepted' | 'declined') => {
     setIsAnimatingOut(true)
     // Wait for animation to complete before hiding
     setTimeout(() => {
       localStorage.setItem(COOKIE_CONSENT_KEY, value)
-      setConsent(value)
+      setLocalConsent(value)
       setIsVisible(false)
+      // Trigger storage event for other tabs/instances
+      window.dispatchEvent(new Event('storage'))
     }, 300)
   }
 
@@ -120,20 +145,16 @@ export function CookieConsent() {
  * Useful for conditionally loading analytics
  */
 export function useCookieConsent() {
-  const [consent, setConsent] = useState<ConsentValue>(null)
-  const [isLoading, setIsLoading] = useState(true)
-
-  useEffect(() => {
-    const storedConsent = localStorage.getItem(COOKIE_CONSENT_KEY)
-    if (storedConsent === 'accepted' || storedConsent === 'declined') {
-      setConsent(storedConsent)
-    }
-    setIsLoading(false)
-  }, [])
+  // Use useSyncExternalStore for localStorage - avoids setState in effect
+  const consent = useSyncExternalStore(
+    subscribeToStorage,
+    getStoredConsentSnapshot,
+    getServerSnapshot
+  )
 
   return {
     consent,
-    isLoading,
+    isLoading: false,
     hasAccepted: consent === 'accepted',
     hasDeclined: consent === 'declined',
     hasMadeChoice: consent !== null,
