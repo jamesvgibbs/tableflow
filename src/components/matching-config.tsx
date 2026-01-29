@@ -19,7 +19,7 @@ import {
   type MatchingPresetId,
   type MatchingWeights,
 } from "@/lib/types"
-import { Check, Loader2, RotateCcw } from "lucide-react"
+import { Check, Loader2, RotateCcw, History } from "lucide-react"
 
 interface MatchingConfigProps {
   eventId: Id<"events">
@@ -61,18 +61,23 @@ const WEIGHT_ORDER: (keyof MatchingWeights)[] = [
 export function MatchingConfig({ eventId }: MatchingConfigProps) {
   const config = useQuery(api.matchingConfig.getByEventWithDefaults, { eventId })
   const updateWeights = useMutation(api.matchingConfig.updateWeights)
+  const updateNoveltyPreference = useMutation(api.matchingConfig.updateNoveltyPreference)
   const applyPreset = useMutation(api.matchingConfig.applyPreset)
 
   const [localWeights, setLocalWeights] = React.useState<MatchingWeights | null>(null)
+  const [localNovelty, setLocalNovelty] = React.useState<number | null>(null)
   const [saving, setSaving] = React.useState(false)
   const [saved, setSaved] = React.useState(false)
 
-  // Initialize local weights when config loads
+  // Initialize local weights and novelty when config loads
   React.useEffect(() => {
     if (config?.weights && !localWeights) {
       setLocalWeights(config.weights)
     }
-  }, [config, localWeights])
+    if (config && localNovelty === null) {
+      setLocalNovelty(config.noveltyPreference ?? 0.5)
+    }
+  }, [config, localWeights, localNovelty])
 
   // Show loading state
   if (!config) {
@@ -104,11 +109,20 @@ export function MatchingConfig({ eventId }: MatchingConfigProps) {
     setSaving(true)
     try {
       await updateWeights({ eventId, weights: localWeights })
+      // Also save novelty preference if changed
+      if (localNovelty !== null && localNovelty !== (config?.noveltyPreference ?? 0.5)) {
+        await updateNoveltyPreference({ eventId, noveltyPreference: localNovelty })
+      }
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
     } finally {
       setSaving(false)
     }
+  }
+
+  const handleNoveltyChange = (value: number) => {
+    setLocalNovelty(value)
+    setSaved(false)
   }
 
   const handleApplyPreset = async (presetId: MatchingPresetId) => {
@@ -117,6 +131,10 @@ export function MatchingConfig({ eventId }: MatchingConfigProps) {
       await applyPreset({ eventId, preset: presetId })
       // Update local state with preset weights
       setLocalWeights(MATCHING_PRESETS[presetId].weights)
+      // Set novelty based on preset type
+      const noveltyForPreset = presetId === "maxDiversity" || presetId === "networkingOptimized" ? 0.8 : 0.5
+      setLocalNovelty(noveltyForPreset)
+      await updateNoveltyPreference({ eventId, noveltyPreference: noveltyForPreset })
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
     } finally {
@@ -126,10 +144,14 @@ export function MatchingConfig({ eventId }: MatchingConfigProps) {
 
   const handleReset = () => {
     setLocalWeights(config.weights)
+    setLocalNovelty(config.noveltyPreference ?? 0.5)
     setSaved(false)
   }
 
-  const hasChanges = localWeights && JSON.stringify(localWeights) !== JSON.stringify(config.weights)
+  const noveltyValue = localNovelty ?? config.noveltyPreference ?? 0.5
+  const hasWeightChanges = localWeights && JSON.stringify(localWeights) !== JSON.stringify(config.weights)
+  const hasNoveltyChanges = localNovelty !== null && localNovelty !== (config.noveltyPreference ?? 0.5)
+  const hasChanges = hasWeightChanges || hasNoveltyChanges
 
   return (
     <Card>
@@ -189,6 +211,47 @@ export function MatchingConfig({ eventId }: MatchingConfigProps) {
               </p>
             </div>
           ))}
+        </div>
+
+        {/* Cross-Event Memory */}
+        <div className="space-y-4 pt-4 border-t">
+          <div className="flex items-center gap-2">
+            <History className="h-5 w-5 text-muted-foreground" />
+            <Label className="text-sm font-medium">Cross-Event Memory</Label>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            I remember who sat together at your previous events. Use this to help guests meet new people.
+          </p>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="novelty" className="text-sm">
+                New Connections Preference
+              </Label>
+              <span className="text-sm text-muted-foreground tabular-nums w-12 text-right">
+                {noveltyValue.toFixed(2)}
+              </span>
+            </div>
+            <Slider
+              id="novelty"
+              min={0}
+              max={1}
+              step={0.1}
+              value={[noveltyValue]}
+              onValueChange={([value]) => handleNoveltyChange(value)}
+              disabled={saving}
+            />
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>Ignore history</span>
+              <span>Strongly prefer new</span>
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              {noveltyValue < 0.3
+                ? "I will not consider who sat together before. Repeat tablemates are fine."
+                : noveltyValue < 0.7
+                  ? "I will gently encourage new connections while still allowing some familiar faces."
+                  : "I will strongly avoid seating people with past tablemates from your other events."}
+            </p>
+          </div>
         </div>
 
         {/* Actions */}

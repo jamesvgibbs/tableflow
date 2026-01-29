@@ -23,7 +23,7 @@ Detailed task breakdown with acceptance criteria and e2e test requirements.
 ### Remaining High-Priority Items
 1. **Clerk Dashboard Setup** (Tasks 2.1, 2.3) - Manual configuration required
 2. **Terms & Privacy Pages** (Tasks 10.1, 10.2) - Legal content needed *(Skipped per user)*
-3. **Novelty UI** (Task 7.4 partial) - Matching wizard integration *(Skipped per user)*
+3. ~~**Novelty UI** (Task 7.4)~~ - ✅ Complete
 
 ---
 
@@ -789,7 +789,7 @@ Detailed task breakdown with acceptance criteria and e2e test requirements.
 
 ---
 
-### Task 7.4: Novelty Preference Weight
+### Task 7.4: Novelty Preference Weight ✅
 
 **Description**: Add configurable weight for preferring new connections.
 
@@ -797,8 +797,8 @@ Detailed task breakdown with acceptance criteria and e2e test requirements.
 - [x] `matchingConfig` has `noveltyPreference` weight (0-1)
 - [x] 0 = ignore history, 1 = strongly prefer new connections
 - [x] Default value: 0.5
-- [ ] Matching wizard includes novelty question *(UI integration pending)*
-- [ ] Human-readable explanation in config summary *(UI integration pending)*
+- [x] Matching wizard includes novelty slider
+- [x] Human-readable explanation updates based on slider value
 
 **E2E Test**: `e2e/algorithm/novelty-weight.spec.ts`
 - Set novelty to 0, verify repeat tablemates allowed
@@ -811,10 +811,7 @@ Detailed task breakdown with acceptance criteria and e2e test requirements.
   - `saveMatchingConfig()` includes noveltyPreference
 - `convex/events.ts` - DONE (noveltyPreference used in scoring)
 - `convex/preview.ts` - DONE (noveltyPreference used in scoring)
-
-**Files to Modify** (UI integration):
-- `src/app/(app)/event/[id]/matching/page.tsx` (add novelty question)
-- `src/lib/config-mapper.ts` (map novelty answer to weight)
+- `src/components/matching-config.tsx` - DONE (added Cross-Event Memory UI section)
 
 ---
 
