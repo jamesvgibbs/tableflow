@@ -1,6 +1,52 @@
 import { v } from "convex/values"
-import { mutation, query } from "./_generated/server"
+import { mutation, query, QueryCtx, MutationCtx } from "./_generated/server"
 import { Id } from "./_generated/dataModel"
+
+// =============================================================================
+// Authentication Helpers
+// =============================================================================
+
+/**
+ * Get the authenticated user's ID from Clerk.
+ * Returns null if not authenticated.
+ */
+async function getAuthenticatedUserId(ctx: QueryCtx | MutationCtx): Promise<string | null> {
+  const identity = await ctx.auth.getUserIdentity()
+  return identity?.subject ?? null
+}
+
+/**
+ * Verify the current user owns an event.
+ * During migration, events without userId are accessible (backward compatibility).
+ */
+async function verifyEventOwnership(
+  ctx: QueryCtx | MutationCtx,
+  eventId: Id<"events">,
+  userId: string | null
+): Promise<void> {
+  const event = await ctx.db.get(eventId)
+  if (!event) {
+    throw new Error("Event not found")
+  }
+  if (event.userId && event.userId !== userId) {
+    throw new Error("Access denied: you do not own this event")
+  }
+}
+
+/**
+ * Verify the current user owns the event that a constraint belongs to.
+ */
+async function verifyConstraintOwnership(
+  ctx: QueryCtx | MutationCtx,
+  constraintId: Id<"seatingConstraints">,
+  userId: string | null
+): Promise<void> {
+  const constraint = await ctx.db.get(constraintId)
+  if (!constraint) {
+    throw new Error("Constraint not found")
+  }
+  await verifyEventOwnership(ctx, constraint.eventId, userId)
+}
 
 // Constraint types
 export type ConstraintType = "pin" | "repel" | "attract"
@@ -16,7 +62,7 @@ export interface SeatingConstraint {
 }
 
 /**
- * Create a new seating constraint
+ * Create a new seating constraint (with ownership check)
  */
 export const create = mutation({
   args: {
@@ -27,6 +73,9 @@ export const create = mutation({
     reason: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.eventId, userId)
+
     // Validate constraint type
     if (!["pin", "repel", "attract"].includes(args.type)) {
       throw new Error(`Invalid constraint type: ${args.type}`)
@@ -88,7 +137,7 @@ export const create = mutation({
 })
 
 /**
- * Update an existing constraint
+ * Update an existing constraint (with ownership check)
  */
 export const update = mutation({
   args: {
@@ -97,10 +146,8 @@ export const update = mutation({
     reason: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const constraint = await ctx.db.get(args.id)
-    if (!constraint) {
-      throw new Error("Constraint not found")
-    }
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyConstraintOwnership(ctx, args.id, userId)
 
     await ctx.db.patch(args.id, {
       ...(args.tableNumber !== undefined && { tableNumber: args.tableNumber }),
@@ -110,29 +157,31 @@ export const update = mutation({
 })
 
 /**
- * Delete a constraint
+ * Delete a constraint (with ownership check)
  */
 export const remove = mutation({
   args: {
     id: v.id("seatingConstraints"),
   },
   handler: async (ctx, args) => {
-    const constraint = await ctx.db.get(args.id)
-    if (!constraint) {
-      throw new Error("Constraint not found")
-    }
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyConstraintOwnership(ctx, args.id, userId)
+
     await ctx.db.delete(args.id)
   },
 })
 
 /**
- * Get all constraints for an event
+ * Get all constraints for an event (with ownership check)
  */
 export const getByEvent = query({
   args: {
     eventId: v.id("events"),
   },
   handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.eventId, userId)
+
     const constraints = await ctx.db
       .query("seatingConstraints")
       .withIndex("by_event", (q) => q.eq("eventId", args.eventId))
@@ -159,7 +208,7 @@ export const getByEvent = query({
 })
 
 /**
- * Get constraints involving a specific guest
+ * Get constraints involving a specific guest (with ownership check)
  */
 export const getByGuest = query({
   args: {
@@ -167,6 +216,9 @@ export const getByGuest = query({
     eventId: v.id("events"),
   },
   handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.eventId, userId)
+
     // Get all constraints for the event and filter
     const constraints = await ctx.db
       .query("seatingConstraints")
@@ -178,7 +230,7 @@ export const getByGuest = query({
 })
 
 /**
- * Check for conflicting constraints
+ * Check for conflicting constraints (with ownership check)
  * Returns warnings for conflicts that don't prevent assignment but may cause suboptimal results
  */
 export const checkConflicts = query({
@@ -186,6 +238,9 @@ export const checkConflicts = query({
     eventId: v.id("events"),
   },
   handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.eventId, userId)
+
     const constraints = await ctx.db
       .query("seatingConstraints")
       .withIndex("by_event", (q) => q.eq("eventId", args.eventId))
@@ -255,7 +310,7 @@ export const checkConflicts = query({
 })
 
 /**
- * Bulk create constraints (useful for CSV import)
+ * Bulk create constraints (useful for CSV import) (with ownership check)
  */
 export const createMany = mutation({
   args: {
@@ -270,6 +325,9 @@ export const createMany = mutation({
     ),
   },
   handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.eventId, userId)
+
     const createdIds: Id<"seatingConstraints">[] = []
 
     for (const constraint of args.constraints) {
@@ -303,13 +361,16 @@ export const createMany = mutation({
 })
 
 /**
- * Clear all constraints for an event
+ * Clear all constraints for an event (with ownership check)
  */
 export const clearAll = mutation({
   args: {
     eventId: v.id("events"),
   },
   handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.eventId, userId)
+
     const constraints = await ctx.db
       .query("seatingConstraints")
       .withIndex("by_event", (q) => q.eq("eventId", args.eventId))

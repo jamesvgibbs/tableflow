@@ -21,6 +21,10 @@ import {
   Pencil,
   Mail,
   UsersRound,
+  Square,
+  CheckSquare,
+  UserX,
+  Plus,
 } from 'lucide-react'
 import JSZip from 'jszip'
 
@@ -35,6 +39,8 @@ import { useRoundTimer } from '@/hooks/use-round-timer'
 import { TableCard } from '@/components/table-card'
 import { GuestCard } from '@/components/guest-card'
 import { GuestForm } from '@/components/guest-form'
+import { BulkActionBar, type GuestStatus } from '@/components/bulk-action-bar'
+import { QuickAddGuestModal } from '@/components/quick-add-guest-modal'
 import { EventThemeProvider } from '@/components/event-theme-provider'
 import { SeatherderLoading } from '@/components/seatherder-loading'
 import { PresentationMode, RoundManagementCard } from '@/components/live'
@@ -100,6 +106,9 @@ export default function LiveEventPage({ params }: PageProps) {
   // Attendance filter state
   const [attendanceFilter, setAttendanceFilter] = React.useState<'all' | 'waiting' | 'checked-in'>('all')
 
+  // Status filter state
+  const [statusFilter, setStatusFilter] = React.useState<'all' | 'present' | 'late' | 'no-show'>('all')
+
   // Presentation mode
   const [isPresentationMode, setIsPresentationMode] = React.useState(false)
 
@@ -121,6 +130,10 @@ export default function LiveEventPage({ params }: PageProps) {
     alreadyCheckedIn: number
     emailsQueued: number
   } | null>(null)
+
+  // Guest selection state for selective bulk operations
+  const [selectedGuestIds, setSelectedGuestIds] = React.useState<Set<string>>(new Set())
+  const [isBulkOperating, setIsBulkOperating] = React.useState(false)
 
   // Convex queries
   const event = useQuery(api.events.get, { id: eventId })
@@ -154,6 +167,10 @@ export default function LiveEventPage({ params }: PageProps) {
   const uncheckInGuest = useMutation(api.guests.uncheckIn)
   const updateGuest = useMutation(api.guests.update)
   const bulkCheckIn = useMutation(api.guests.bulkCheckIn)
+  const bulkCheckInSelected = useMutation(api.guests.bulkCheckInSelected)
+  const bulkUncheckIn = useMutation(api.guests.bulkUncheckIn)
+  const bulkUpdateStatus = useMutation(api.guests.bulkUpdateStatus)
+  const createGuest = useMutation(api.guests.create)
 
   // Sync event data with state when loaded
   React.useEffect(() => {
@@ -328,10 +345,16 @@ export default function LiveEventPage({ params }: PageProps) {
 
     let filtered = [...guests]
 
+    // Apply attendance filter
     if (attendanceFilter === 'waiting') {
       filtered = filtered.filter((g) => !g.checkedIn)
     } else if (attendanceFilter === 'checked-in') {
       filtered = filtered.filter((g) => g.checkedIn)
+    }
+
+    // Apply status filter
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter((g) => g.status === statusFilter)
     }
 
     // Sort: not checked in first, then alphabetically
@@ -341,7 +364,17 @@ export default function LiveEventPage({ params }: PageProps) {
       }
       return a.name.localeCompare(b.name)
     })
-  }, [guests, attendanceFilter])
+  }, [guests, attendanceFilter, statusFilter])
+
+  // Status counts for filter badges
+  const statusCounts = React.useMemo(() => {
+    if (!guests) return { present: 0, late: 0, noShow: 0 }
+    return {
+      present: guests.filter((g) => g.status === 'present').length,
+      late: guests.filter((g) => g.status === 'late').length,
+      noShow: guests.filter((g) => g.status === 'no-show').length,
+    }
+  }, [guests])
 
   // Handle manual check-in
   const handleManualCheckIn = React.useCallback(
@@ -439,6 +472,132 @@ export default function LiveEventPage({ params }: PageProps) {
       setIsBulkCheckingIn(false)
     }
   }, [eventId, bulkCheckIn])
+
+  // Toggle guest selection
+  const toggleGuestSelection = React.useCallback((guestId: string) => {
+    setSelectedGuestIds(prev => {
+      const next = new Set(prev)
+      if (next.has(guestId)) {
+        next.delete(guestId)
+      } else {
+        next.add(guestId)
+      }
+      return next
+    })
+  }, [])
+
+  // Clear guest selection
+  const clearGuestSelection = React.useCallback(() => {
+    setSelectedGuestIds(new Set())
+  }, [])
+
+  // Select all visible guests
+  const selectAllGuests = React.useCallback((guestIds: string[]) => {
+    setSelectedGuestIds(new Set(guestIds))
+  }, [])
+
+  // Calculate selected guests stats
+  const selectedGuestsStats = React.useMemo(() => {
+    if (!guests) return { total: 0, checkedIn: 0 }
+    const selectedGuests = guests.filter(g => selectedGuestIds.has(g._id))
+    return {
+      total: selectedGuests.length,
+      checkedIn: selectedGuests.filter(g => g.checkedIn).length,
+    }
+  }, [guests, selectedGuestIds])
+
+  // Handle selective bulk check-in
+  const handleBulkCheckInSelected = React.useCallback(async () => {
+    if (selectedGuestIds.size === 0) return
+
+    setIsBulkOperating(true)
+    try {
+      const result = await bulkCheckInSelected({
+        guestIds: Array.from(selectedGuestIds) as Id<'guests'>[],
+      })
+      if (result.checkedIn > 0) {
+        toast.success(`Checked in ${result.checkedIn} guest${result.checkedIn !== 1 ? 's' : ''}.`)
+      }
+      clearGuestSelection()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to check in guests')
+    } finally {
+      setIsBulkOperating(false)
+    }
+  }, [selectedGuestIds, bulkCheckInSelected, clearGuestSelection])
+
+  // Handle selective bulk undo check-in
+  const handleBulkUncheckIn = React.useCallback(async () => {
+    if (selectedGuestIds.size === 0) return
+
+    setIsBulkOperating(true)
+    try {
+      const result = await bulkUncheckIn({
+        guestIds: Array.from(selectedGuestIds) as Id<'guests'>[],
+      })
+      if (result.uncheckedIn > 0) {
+        toast.success(`Undid check-in for ${result.uncheckedIn} guest${result.uncheckedIn !== 1 ? 's' : ''}.`)
+      }
+      clearGuestSelection()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to undo check-in')
+    } finally {
+      setIsBulkOperating(false)
+    }
+  }, [selectedGuestIds, bulkUncheckIn, clearGuestSelection])
+
+  // Handle bulk status update
+  const handleBulkUpdateStatus = React.useCallback(async (status: GuestStatus) => {
+    if (selectedGuestIds.size === 0) return
+
+    setIsBulkOperating(true)
+    try {
+      const result = await bulkUpdateStatus({
+        guestIds: Array.from(selectedGuestIds) as Id<'guests'>[],
+        status,
+      })
+      const statusLabels: Record<string, string> = {
+        present: 'Present',
+        late: 'Late Arrival',
+        'no-show': 'No-Show',
+      }
+      if (status === null) {
+        toast.success(`Cleared status for ${result.updated} guest${result.updated !== 1 ? 's' : ''}.`)
+      } else {
+        toast.success(`Marked ${result.updated} guest${result.updated !== 1 ? 's' : ''} as ${statusLabels[status]}.`)
+      }
+      clearGuestSelection()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to update status')
+    } finally {
+      setIsBulkOperating(false)
+    }
+  }, [selectedGuestIds, bulkUpdateStatus, clearGuestSelection])
+
+  // Handle quick add guest
+  const handleQuickAddGuest = React.useCallback(async (guestData: {
+    name: string
+    email?: string
+    phone?: string
+    dietaryNotes?: string
+  }) => {
+    try {
+      await createGuest({
+        eventId,
+        name: guestData.name,
+        email: guestData.email,
+        phone: guestData.phone,
+        dietary: guestData.dietaryNotes ? {
+          restrictions: [],
+          notes: guestData.dietaryNotes,
+        } : undefined,
+      })
+      toast.success(`Added ${guestData.name}.`)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to add guest')
+      throw error
+    }
+  }, [eventId, createGuest])
 
   // Resolve theme colors
   const themeColors = event ? resolveThemeColors(event.themePreset, event.customColors) : undefined
@@ -734,6 +893,42 @@ export default function LiveEventPage({ params }: PageProps) {
                   </Button>
                 </div>
 
+                {/* Selection controls */}
+                {filteredGuests.length > 0 && (
+                  <div className="flex items-center justify-between mb-4">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        if (selectedGuestIds.size === filteredGuests.length) {
+                          clearGuestSelection()
+                        } else {
+                          selectAllGuests(filteredGuests.map(g => g._id))
+                        }
+                      }}
+                      className="gap-2"
+                      style={themedStyles?.outlineButton}
+                    >
+                      {selectedGuestIds.size === filteredGuests.length && filteredGuests.length > 0 ? (
+                        <>
+                          <CheckSquare className="size-4" />
+                          Deselect All
+                        </>
+                      ) : (
+                        <>
+                          <Square className="size-4" />
+                          Select All ({filteredGuests.length})
+                        </>
+                      )}
+                    </Button>
+                    {selectedGuestIds.size > 0 && (
+                      <span className="text-sm" style={themedStyles?.pageTextMuted}>
+                        {selectedGuestIds.size} selected
+                      </span>
+                    )}
+                  </div>
+                )}
+
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 stagger-children">
                   {filteredGuests.length === 0 ? (
                     <div className="col-span-full text-center py-8" style={themedStyles?.pageTextMuted}>
@@ -749,26 +944,48 @@ export default function LiveEventPage({ params }: PageProps) {
                         roundNumber: a.roundNumber,
                         tableNumber: a.tableNumber,
                       }))
+                      const isSelected = selectedGuestIds.has(guest._id)
 
                       return (
-                        <GuestCard
-                          key={guest._id}
-                          guest={{
-                            id: guest._id,
-                            name: guest.name,
-                            department: guest.department,
-                            email: guest.email,
-                            phone: guest.phone,
-                            tableNumber: guest.tableNumber,
-                            qrCodeId: guest.qrCodeId,
-                            checkedIn: guest.checkedIn,
-                          }}
-                          eventName={event.name}
-                          baseUrl={baseUrl}
-                          roundAssignments={guestRoundAssignments}
-                          themeColors={themeColors}
-                          onEdit={() => setEditingGuest(guest)}
-                        />
+                        <div key={guest._id} className="relative">
+                          {/* Selection checkbox */}
+                          <button
+                            onClick={() => toggleGuestSelection(guest._id)}
+                            className={cn(
+                              "absolute -top-2 -left-2 z-10 size-6 rounded-md flex items-center justify-center transition-all",
+                              isSelected
+                                ? "bg-primary text-primary-foreground shadow-md"
+                                : "bg-background border shadow-sm hover:bg-muted"
+                            )}
+                            style={isSelected && themedStyles ? { backgroundColor: themeColors?.primary, color: '#fff' } : undefined}
+                          >
+                            {isSelected && <CheckCircle2 className="size-4" />}
+                          </button>
+                          <div className={cn(
+                            "transition-all rounded-lg",
+                            isSelected && "ring-2 ring-offset-2 ring-primary"
+                          )}
+                          style={isSelected && themeColors ? { '--tw-ring-color': themeColors.primary } as React.CSSProperties : undefined}
+                          >
+                            <GuestCard
+                              guest={{
+                                id: guest._id,
+                                name: guest.name,
+                                department: guest.department,
+                                email: guest.email,
+                                phone: guest.phone,
+                                tableNumber: guest.tableNumber,
+                                qrCodeId: guest.qrCodeId,
+                                checkedIn: guest.checkedIn,
+                              }}
+                              eventName={event.name}
+                              baseUrl={baseUrl}
+                              roundAssignments={guestRoundAssignments}
+                              themeColors={themeColors}
+                              onEdit={() => setEditingGuest(guest)}
+                            />
+                          </div>
+                        </div>
                       )
                     })
                   )}
@@ -811,11 +1028,32 @@ export default function LiveEventPage({ params }: PageProps) {
                       />
                     </div>
 
-                    {/* Bulk Actions */}
+                    {/* Quick Actions */}
                     <div
                       className="mt-6 pt-4 flex flex-wrap items-center justify-center gap-3 border-t"
                       style={themedStyles?.divider}
                     >
+                      <QuickAddGuestModal
+                        onAdd={handleQuickAddGuest}
+                        guestLabel={getGuestLabel(event)}
+                        trigger={
+                          <Button
+                            variant="outline"
+                            className="gap-2 transition-colors"
+                            style={themedStyles
+                              ? hoveredButton === 'quickAdd'
+                                ? themedStyles.outlineButtonOnCardHover
+                                : themedStyles.outlineButtonOnCard
+                              : undefined
+                            }
+                            onMouseEnter={() => setHoveredButton('quickAdd')}
+                            onMouseLeave={() => setHoveredButton(null)}
+                          >
+                            <Plus className="size-4" />
+                            Quick Add {getGuestLabel(event)}
+                          </Button>
+                        }
+                      />
                       <Button
                         onClick={() => setShowBulkCheckInDialog(true)}
                         disabled={isBulkCheckingIn || checkInStats.checkedIn === checkInStats.total}
@@ -906,6 +1144,54 @@ export default function LiveEventPage({ params }: PageProps) {
                   </Button>
                 </div>
 
+                {/* Status filters - show only if there are any statuses */}
+                {(statusCounts.present > 0 || statusCounts.late > 0 || statusCounts.noShow > 0) && (
+                  <div className="flex gap-2 flex-wrap">
+                    <span className="text-sm self-center" style={themedStyles?.pageTextMuted}>Status:</span>
+                    <Button
+                      variant={statusFilter === 'all' ? 'secondary' : 'ghost'}
+                      size="sm"
+                      onClick={() => setStatusFilter('all')}
+                      className="h-7 text-xs"
+                    >
+                      All
+                    </Button>
+                    {statusCounts.present > 0 && (
+                      <Button
+                        variant={statusFilter === 'present' ? 'secondary' : 'ghost'}
+                        size="sm"
+                        onClick={() => setStatusFilter('present')}
+                        className="h-7 text-xs gap-1"
+                      >
+                        <CheckCircle2 className="size-3 text-green-600" />
+                        Present ({statusCounts.present})
+                      </Button>
+                    )}
+                    {statusCounts.late > 0 && (
+                      <Button
+                        variant={statusFilter === 'late' ? 'secondary' : 'ghost'}
+                        size="sm"
+                        onClick={() => setStatusFilter('late')}
+                        className="h-7 text-xs gap-1"
+                      >
+                        <Clock className="size-3 text-amber-600" />
+                        Late ({statusCounts.late})
+                      </Button>
+                    )}
+                    {statusCounts.noShow > 0 && (
+                      <Button
+                        variant={statusFilter === 'no-show' ? 'secondary' : 'ghost'}
+                        size="sm"
+                        onClick={() => setStatusFilter('no-show')}
+                        className="h-7 text-xs gap-1"
+                      >
+                        <UserX className="size-3 text-red-600" />
+                        No-Show ({statusCounts.noShow})
+                      </Button>
+                    )}
+                  </div>
+                )}
+
                 <Card style={themedStyles?.card}>
                   <CardContent className="p-0">
                     {attendanceGuests.length === 0 ? (
@@ -955,7 +1241,27 @@ export default function LiveEventPage({ params }: PageProps) {
                                   />
                                 )}
                                 <div className="min-w-0">
-                                  <p className="font-medium truncate" style={themedStyles?.cardText}>{guest.name}</p>
+                                  <div className="flex items-center gap-2">
+                                    <p className="font-medium truncate" style={themedStyles?.cardText}>{guest.name}</p>
+                                    {guest.status === 'present' && (
+                                      <Badge variant="outline" className="shrink-0 h-5 text-xs gap-1 border-green-200 bg-green-50 text-green-700">
+                                        <CheckCircle2 className="size-3" />
+                                        Present
+                                      </Badge>
+                                    )}
+                                    {guest.status === 'late' && (
+                                      <Badge variant="outline" className="shrink-0 h-5 text-xs gap-1 border-amber-200 bg-amber-50 text-amber-700">
+                                        <Clock className="size-3" />
+                                        Late
+                                      </Badge>
+                                    )}
+                                    {guest.status === 'no-show' && (
+                                      <Badge variant="outline" className="shrink-0 h-5 text-xs gap-1 border-red-200 bg-red-50 text-red-700">
+                                        <UserX className="size-3" />
+                                        No-Show
+                                      </Badge>
+                                    )}
+                                  </div>
                                   <div className="flex items-center gap-2 text-sm flex-wrap" style={themedStyles?.cardTextMuted}>
                                     {guest.department && <span>{guest.department}</span>}
                                     {tableDisplay && (
@@ -1119,6 +1425,17 @@ export default function LiveEventPage({ params }: PageProps) {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Bulk Action Bar for selected guests */}
+        <BulkActionBar
+          selectedCount={selectedGuestsStats.total}
+          selectedCheckedInCount={selectedGuestsStats.checkedIn}
+          onCheckIn={handleBulkCheckInSelected}
+          onUncheckIn={handleBulkUncheckIn}
+          onClearSelection={clearGuestSelection}
+          onUpdateStatus={handleBulkUpdateStatus}
+          isLoading={isBulkOperating}
+        />
       </TooltipProvider>
     </EventThemeProvider>
   )
