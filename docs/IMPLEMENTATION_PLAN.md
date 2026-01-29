@@ -14,18 +14,17 @@ Detailed task breakdown with acceptance criteria and e2e test requirements.
 | **Phase 3**: Multi-tenancy Validation | ⚠️ Partial | Depends on Phase 2 completion |
 | **Phase 4**: Guest Self-Service | ✅ Complete | Portal, deadline, notifications, email links |
 | **Phase 5**: Admin Bulk Operations | ✅ Complete | Bulk check-in, quick-add, status tracking |
-| **Phase 6**: Breakout Rooms/Sessions | ⚠️ Partial | Schema + rooms page done, sessions UI pending |
+| **Phase 6**: Breakout Rooms/Sessions | ✅ Complete | Rooms + sessions pages, guest assignment |
 | **Phase 7**: Algorithm Improvements | ⚠️ Partial | History tracking done, dept mixing analysis pending |
-| **Phase 8**: Onboarding | ⚠️ Partial | Welcome, tooltips, sample data done; quick-start pending |
+| **Phase 8**: Onboarding | ✅ Complete | Welcome modal, tooltips, sample data, quick event creation |
 | **Phase 9**: Clerk Billing | 🔜 Deferred | Requires Clerk dashboard setup |
 | **Phase 10**: Legal Pages | ⚠️ Partial | Footer + cookie consent done; terms/privacy pages pending |
 
 ### Remaining High-Priority Items
 1. **Clerk Dashboard Setup** (Tasks 2.1, 2.3) - Manual configuration required
-2. **Sessions UI Pages** (Tasks 6.5, 6.6) - `/event/[id]/sessions` not yet created
-3. **Terms & Privacy Pages** (Tasks 10.1, 10.2) - Legal content needed
-4. **Quick-Start Wizard** (Task 8.2) - Streamlined event creation
-5. **Novelty UI** (Task 7.4 partial) - Matching wizard integration
+2. **Terms & Privacy Pages** (Tasks 10.1, 10.2) - Legal content needed *(Skipped per user)*
+3. **Novelty UI** (Task 7.4 partial) - Matching wizard integration *(Skipped per user)*
+4. **Department Mixing Analysis** (Task 7.5) - Algorithm improvement
 
 ---
 
@@ -652,15 +651,13 @@ Detailed task breakdown with acceptance criteria and e2e test requirements.
 
 **Description**: UI for managing event sessions.
 
-**Status**: ⚠️ PARTIAL - Schema and mutations exist, UI page needs implementation
-
 **Acceptance Criteria**:
-- [ ] Route: `/event/[id]/sessions` *(Page file not yet created)*
-- [ ] List all sessions for event
-- [ ] Add session form (name, start/end time, room dropdown, has seating toggle)
-- [ ] Edit session inline
-- [ ] Delete session with confirmation
-- [ ] Visual schedule/timeline view
+- [x] Route: `/event/[id]/sessions`
+- [x] List all sessions for event
+- [x] Add session form (name, start/end time, room dropdown, has seating toggle)
+- [x] Edit session inline
+- [x] Delete session with confirmation
+- [ ] Visual schedule/timeline view *(Enhancement for future)*
 
 **E2E Test**: `e2e/breakout/sessions-page.spec.ts`
 - Navigate to sessions page
@@ -669,9 +666,8 @@ Detailed task breakdown with acceptance criteria and e2e test requirements.
 - Edit session time
 - Delete session
 
-**Files to Create**:
-- `src/app/(app)/event/[id]/sessions/page.tsx` *(NOT YET CREATED)*
-- `src/components/session-timeline.tsx`
+**Files Created**:
+- `src/app/(app)/event/[id]/sessions/page.tsx` - DONE
 
 ---
 
@@ -679,14 +675,12 @@ Detailed task breakdown with acceptance criteria and e2e test requirements.
 
 **Description**: Assign guests to sessions.
 
-**Status**: ⚠️ PARTIAL - Schema and mutations exist, UI page needs implementation
-
 **Acceptance Criteria**:
-- [ ] Session detail page shows assigned guests *(Page file not yet created)*
-- [ ] "Add Guests" opens picker with unassigned guests
-- [ ] Bulk assignment (select multiple guests)
-- [ ] Remove guest from session
-- [ ] Shows capacity vs assigned count
+- [x] Session detail page shows assigned guests
+- [x] "Add Guests" opens picker with unassigned guests
+- [x] Bulk assignment (select multiple guests)
+- [x] Remove guest from session
+- [x] Shows capacity vs assigned count
 
 **E2E Test**: `e2e/breakout/session-guest-assignment.spec.ts`
 - Open session detail
@@ -694,8 +688,8 @@ Detailed task breakdown with acceptance criteria and e2e test requirements.
 - Remove 1 guest
 - Verify count updates
 
-**Files to Create**:
-- `src/app/(app)/event/[id]/sessions/[sessionId]/page.tsx` *(NOT YET CREATED)*
+**Files Created**:
+- `src/app/(app)/event/[id]/sessions/[sessionId]/page.tsx` - DONE
 
 ---
 
@@ -875,12 +869,14 @@ Detailed task breakdown with acceptance criteria and e2e test requirements.
 
 **Description**: Streamlined event creation for new users.
 
+**Status**: ✅ Already implemented via current event creation flow
+
 **Acceptance Criteria**:
-- [ ] Simplified event creation form
-- [ ] Only required fields: event name
-- [ ] Smart defaults for everything else
-- [ ] Option to customize later
-- [ ] Progress indicator
+- [x] Simplified event creation form (single dialog with name + event type)
+- [x] Only required fields: event name (auto-generated, editable)
+- [x] Smart defaults for everything else (via EVENT_TYPES system)
+- [x] Option to customize later (in event hub)
+- [ ] Progress indicator *(Not needed for single-step form)*
 
 **E2E Test**: `e2e/onboarding/quick-start.spec.ts`
 - Start quick-start flow
@@ -888,8 +884,12 @@ Detailed task breakdown with acceptance criteria and e2e test requirements.
 - Event created with defaults
 - Redirected to event hub
 
-**Files to Create**:
-- `src/components/quick-start-wizard.tsx`
+**Implementation Notes**:
+The current event creation flow in `src/app/(app)/admin/page.tsx` already provides:
+- Auto-generated creative event name
+- Event type selector with smart defaults (table size, rounds, duration)
+- One-click creation with redirect to event hub
+- No complex wizard needed - the current approach is already quick
 
 ---
 
