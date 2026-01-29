@@ -21,6 +21,11 @@ import {
   Mail,
   Sparkles,
   LayoutGrid,
+  Clock,
+  Link2,
+  Bell,
+  MapPin,
+  CalendarDays,
 } from "lucide-react"
 
 import { NewGuest, type DietaryInfo } from "@/lib/types"
@@ -103,6 +108,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Separator } from "@/components/ui/separator"
+import { Switch } from "@/components/ui/switch"
 import {
   Dialog,
   DialogContent,
@@ -145,6 +151,9 @@ export default function EventPage({ params }: PageProps) {
   // Hover state for themed buttons
   const [hoveredButton, setHoveredButton] = React.useState<string | null>(null)
 
+  // Sample data state
+  const [isAddingSampleGuests, setIsAddingSampleGuests] = React.useState(false)
+
   // Load params on mount
   React.useEffect(() => {
     async function loadParams() {
@@ -177,8 +186,11 @@ export default function EventPage({ params }: PageProps) {
   const updateCustomColors = useMutation(api.events.updateCustomColors)
   const updateEventTypeSettings = useMutation(api.events.updateEventTypeSettings)
   const clearEventTypeSettings = useMutation(api.events.clearEventTypeSettings)
+  const updateSelfServiceSettings = useMutation(api.events.updateSelfServiceSettings)
   const addGuest = useMutation(api.guests.create)
   const addGuests = useMutation(api.guests.createMany)
+  const addSampleGuestsMutation = useMutation(api.guests.addSampleGuests)
+  const removeSampleGuestsMutation = useMutation(api.guests.removeSampleGuests)
   const removeGuest = useMutation(api.guests.remove)
   const removeAllGuests = useMutation(api.guests.removeAllFromEvent)
   const updateGuest = useMutation(api.guests.update)
@@ -315,6 +327,33 @@ export default function EventPage({ params }: PageProps) {
     }
   }, [eventId, removeAllGuests])
 
+  // Add sample guests for demo
+  const handleAddSampleGuests = React.useCallback(async () => {
+    if (!eventId) return
+
+    setIsAddingSampleGuests(true)
+    try {
+      const result = await addSampleGuestsMutation({ eventId, count: 24 })
+      toast.success(`I added ${result.added} demo guests. Feel free to experiment.`)
+    } catch {
+      toast.error("I could not add the demo guests.")
+    } finally {
+      setIsAddingSampleGuests(false)
+    }
+  }, [eventId, addSampleGuestsMutation])
+
+  // Clear sample/demo guests
+  const handleClearSampleGuests = React.useCallback(async () => {
+    if (!eventId) return
+
+    try {
+      const result = await removeSampleGuestsMutation({ eventId })
+      toast.success(`Removed ${result.removed} demo guests.`)
+    } catch {
+      toast.error("I could not remove the demo guests.")
+    }
+  }, [eventId, removeSampleGuestsMutation])
+
   // Update event name
   const handleUpdateName = React.useCallback(async () => {
     if (!eventId || !eventName.trim()) return
@@ -445,6 +484,41 @@ export default function EventPage({ params }: PageProps) {
     [eventId, clearEventTypeSettings]
   )
 
+  // Self-service settings handlers
+  const handleUpdateSelfServiceDeadline = React.useCallback(
+    async (deadline: string | null) => {
+      if (!eventId) return
+
+      try {
+        await updateSelfServiceSettings({
+          id: eventId,
+          selfServiceDeadline: deadline,
+        })
+        toast.success(deadline ? "Deadline set." : "Deadline cleared.")
+      } catch {
+        toast.error("I could not update the deadline.")
+      }
+    },
+    [eventId, updateSelfServiceSettings]
+  )
+
+  const handleUpdateSelfServiceNotifications = React.useCallback(
+    async (enabled: boolean) => {
+      if (!eventId) return
+
+      try {
+        await updateSelfServiceSettings({
+          id: eventId,
+          selfServiceNotificationsEnabled: enabled,
+        })
+        toast.success(enabled ? "Notifications enabled." : "Notifications disabled.")
+      } catch {
+        toast.error("I could not update the notification setting.")
+      }
+    },
+    [eventId, updateSelfServiceSettings]
+  )
+
   // Assign tables
   const handleAssignTables = React.useCallback(async () => {
     if (!eventId || !guests || guests.length === 0) return
@@ -493,6 +567,17 @@ export default function EventPage({ params }: PageProps) {
       guests.map((g) => g.department).filter((d): d is string => !!d)
     )
     return Array.from(depts).sort()
+  }, [guests])
+
+  // Check if there are demo guests
+  const hasDemoGuests = React.useMemo(() => {
+    if (!guests) return false
+    return guests.some(g => g.attributes?.customTags?.includes('demo'))
+  }, [guests])
+
+  const demoGuestCount = React.useMemo(() => {
+    if (!guests) return 0
+    return guests.filter(g => g.attributes?.customTags?.includes('demo')).length
   }, [guests])
 
   // Resolve theme colors
@@ -707,6 +792,44 @@ export default function EventPage({ params }: PageProps) {
                   Seating
                 </Button>
 
+                {/* Rooms Link */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2 transition-colors"
+                  onClick={() => router.push(`/event/${eventId}/rooms`)}
+                  style={themedStyles
+                    ? hoveredButton === 'rooms'
+                      ? { ...themedStyles.pageInput, backgroundColor: `${themedStyles.pageText.color}20` }
+                      : themedStyles.pageInput
+                    : undefined
+                  }
+                  onMouseEnter={() => setHoveredButton('rooms')}
+                  onMouseLeave={() => setHoveredButton(null)}
+                >
+                  <MapPin className="size-4" />
+                  Rooms
+                </Button>
+
+                {/* Sessions Link */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2 transition-colors"
+                  onClick={() => router.push(`/event/${eventId}/sessions`)}
+                  style={themedStyles
+                    ? hoveredButton === 'sessions'
+                      ? { ...themedStyles.pageInput, backgroundColor: `${themedStyles.pageText.color}20` }
+                      : themedStyles.pageInput
+                    : undefined
+                  }
+                  onMouseEnter={() => setHoveredButton('sessions')}
+                  onMouseLeave={() => setHoveredButton(null)}
+                >
+                  <CalendarDays className="size-4" />
+                  Sessions
+                </Button>
+
                 {/* Settings Sheet Trigger */}
                 <Sheet open={showSettingsSheet} onOpenChange={setShowSettingsSheet}>
                   <SheetTrigger asChild>
@@ -748,6 +871,72 @@ export default function EventPage({ params }: PageProps) {
                         onSettingsChange={handleTerminologyChange}
                         onClearSettings={handleClearTerminology}
                       />
+                      <Separator />
+                      {/* Guest Portal Settings */}
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-2">
+                          <Link2 className="size-5" />
+                          <h3 className="font-semibold">Guest Portal</h3>
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          Let guests update their own details. I will send them a personal link.
+                        </p>
+
+                        {/* Deadline Setting */}
+                        <div className="space-y-2">
+                          <Label htmlFor="deadline" className="flex items-center gap-2">
+                            <Clock className="size-4" />
+                            Change Deadline
+                          </Label>
+                          <Input
+                            id="deadline"
+                            type="datetime-local"
+                            value={event.selfServiceDeadline
+                              ? new Date(event.selfServiceDeadline).toISOString().slice(0, 16)
+                              : ""
+                            }
+                            onChange={(e) => {
+                              const value = e.target.value
+                              if (value) {
+                                handleUpdateSelfServiceDeadline(new Date(value).toISOString())
+                              } else {
+                                handleUpdateSelfServiceDeadline(null)
+                              }
+                            }}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            After this time, guests cannot update their information.
+                          </p>
+                          {event.selfServiceDeadline && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleUpdateSelfServiceDeadline(null)}
+                              className="text-destructive hover:text-destructive"
+                            >
+                              Clear Deadline
+                            </Button>
+                          )}
+                        </div>
+
+                        {/* Notifications Toggle */}
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <Label htmlFor="notifications" className="flex items-center gap-2">
+                              <Bell className="size-4" />
+                              Change Notifications
+                            </Label>
+                            <p className="text-xs text-muted-foreground">
+                              Get notified when guests update their info.
+                            </p>
+                          </div>
+                          <Switch
+                            id="notifications"
+                            checked={event.selfServiceNotificationsEnabled ?? false}
+                            onCheckedChange={handleUpdateSelfServiceNotifications}
+                          />
+                        </div>
+                      </div>
                     </div>
                   </SheetContent>
                 </Sheet>
@@ -905,6 +1094,16 @@ export default function EventPage({ params }: PageProps) {
                         )}
                       </CardTitle>
                       <div className="flex items-center gap-2">
+                        {hasDemoGuests && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleClearSampleGuests}
+                            className="text-muted-foreground hover:text-foreground"
+                          >
+                            Clear Demo ({demoGuestCount})
+                          </Button>
+                        )}
                         {guests && guests.length > 0 && (
                           <Button
                             variant="ghost"
@@ -940,21 +1139,44 @@ export default function EventPage({ params }: PageProps) {
                         <Users className="size-12 mx-auto mb-3 opacity-20" />
                         <p className="font-medium mb-1" style={themedStyles?.cardText}>No {getGuestLabelPlural(event).toLowerCase()} yet. I am waiting.</p>
                         <p className="text-sm mb-4">Give me names.</p>
-                        <Button
-                          onClick={() => setShowAddGuestsDialog(true)}
-                          className="gap-2 transition-colors"
-                          style={themedStyles
-                            ? hoveredButton === 'addGuests2'
-                              ? themedStyles.primaryHover
-                              : themedStyles.primary
-                            : undefined
-                          }
-                          onMouseEnter={() => setHoveredButton('addGuests2')}
-                          onMouseLeave={() => setHoveredButton(null)}
-                        >
-                          <Plus className="size-4" />
-                          Add {getGuestLabelPlural(event)}
-                        </Button>
+                        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                          <Button
+                            onClick={() => setShowAddGuestsDialog(true)}
+                            className="gap-2 transition-colors"
+                            style={themedStyles
+                              ? hoveredButton === 'addGuests2'
+                                ? themedStyles.primaryHover
+                                : themedStyles.primary
+                              : undefined
+                            }
+                            onMouseEnter={() => setHoveredButton('addGuests2')}
+                            onMouseLeave={() => setHoveredButton(null)}
+                          >
+                            <Plus className="size-4" />
+                            Add {getGuestLabelPlural(event)}
+                          </Button>
+                          <span className="text-sm" style={themedStyles?.cardTextMuted}>or</span>
+                          <Button
+                            variant="outline"
+                            onClick={handleAddSampleGuests}
+                            disabled={isAddingSampleGuests}
+                            className="gap-2 transition-colors"
+                            style={themedStyles
+                              ? hoveredButton === 'sampleGuests'
+                                ? themedStyles.outlineOnCardHover
+                                : themedStyles.outlineOnCard
+                              : undefined
+                            }
+                            onMouseEnter={() => setHoveredButton('sampleGuests')}
+                            onMouseLeave={() => setHoveredButton(null)}
+                          >
+                            <Sparkles className="size-4" />
+                            {isAddingSampleGuests ? "Adding..." : "Try with demo guests"}
+                          </Button>
+                        </div>
+                        <p className="text-xs mt-4" style={themedStyles?.cardTextMuted}>
+                          Demo guests let you explore the app. You can clear them later.
+                        </p>
                       </div>
                     ) : (
                       <div className="space-y-4">

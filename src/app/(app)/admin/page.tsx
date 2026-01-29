@@ -1,13 +1,13 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { useQuery, useMutation } from 'convex/react'
+import { UserButton, useUser } from '@clerk/nextjs'
 import { api } from '@convex/_generated/api'
 import { Id } from '@convex/_generated/dataModel'
 import { ProtectedRoute } from '@/components/protected-route'
-import { useAuth } from '@/components/auth-provider'
 import { generateEventName } from '@/lib/event-names'
 import { EVENT_TYPES, DEFAULT_EVENT_TYPE } from '@/lib/event-types'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -24,12 +24,14 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { EventTypeSelector, EventTypeDisplay } from '@/components/event-type-selector'
-import { Plus, Trash2, Table as TableIcon, Calendar, LogOut, ArrowLeft } from 'lucide-react'
+import { WelcomeModal } from '@/components/welcome-modal'
+import { Plus, Trash2, Table as TableIcon, Calendar, ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 
 function AdminDashboard() {
   const router = useRouter()
-  const { logout } = useAuth()
+  const searchParams = useSearchParams()
+  const { user } = useUser()
 
   // Delete dialog state
   const [deleteDialogEvent, setDeleteDialogEvent] = useState<{ id: string; name: string } | null>(null)
@@ -40,10 +42,43 @@ function AdminDashboard() {
   const [newEventType, setNewEventType] = useState(DEFAULT_EVENT_TYPE)
   const [isCreating, setIsCreating] = useState(false)
 
+  // Welcome modal state for first-time users
+  const [showWelcome, setShowWelcome] = useState(false)
+  const [hasSeenWelcome, setHasSeenWelcome] = useState(false)
+
   // Convex queries and mutations
   const events = useQuery(api.events.list)
   const createEvent = useMutation(api.events.create)
   const deleteEventMutation = useMutation(api.events.remove)
+
+  // Check for ?create=true URL param to auto-open create dialog
+  useEffect(() => {
+    if (searchParams.get('create') === 'true') {
+      handleOpenCreateDialog()
+      // Clear the URL param
+      router.replace('/admin')
+    }
+  }, [searchParams, router])
+
+  // Show welcome modal for first-time users (no events)
+  useEffect(() => {
+    if (events !== undefined && events.length === 0 && !hasSeenWelcome) {
+      // Check localStorage to see if they've already dismissed the welcome
+      const dismissed = localStorage.getItem('seatherder_welcome_dismissed')
+      if (!dismissed) {
+        setShowWelcome(true)
+      }
+    }
+  }, [events, hasSeenWelcome])
+
+  // Handle welcome modal close
+  const handleWelcomeClose = (open: boolean) => {
+    setShowWelcome(open)
+    if (!open) {
+      setHasSeenWelcome(true)
+      localStorage.setItem('seatherder_welcome_dismissed', 'true')
+    }
+  }
 
   const handleOpenCreateDialog = () => {
     setNewEventName(generateEventName())
@@ -133,15 +168,19 @@ function AdminDashboard() {
             <ArrowLeft className="h-4 w-4" />
             Back to home
           </Link>
-          <Button variant="outline" size="sm" onClick={logout} className="gap-2">
-            <LogOut className="h-4 w-4" />
-            Logout
-          </Button>
+          <UserButton
+            afterSignOutUrl="/"
+            appearance={{
+              elements: {
+                avatarBox: "h-9 w-9",
+              },
+            }}
+          />
         </div>
 
         <div className="text-center mb-12 animate-fade-in">
           <h1 className="text-4xl font-bold mb-3 bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
-            Admin Dashboard
+            {user?.firstName ? `Welcome back, ${user.firstName}` : 'Your Events'}
           </h1>
           <p className="text-lg text-muted-foreground">
             I keep track of your events. Pick one, or start something new.
@@ -290,6 +329,9 @@ function AdminDashboard() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Welcome Modal for first-time users */}
+        <WelcomeModal open={showWelcome} onOpenChange={handleWelcomeClose} />
       </div>
     </div>
   )
