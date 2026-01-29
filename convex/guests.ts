@@ -1,12 +1,96 @@
 import { v } from "convex/values"
-import { mutation, query } from "./_generated/server"
-import { api } from "./_generated/api"
+import { mutation, query, QueryCtx, MutationCtx } from "./_generated/server"
+import { api, internal } from "./_generated/api"
 import type { Id } from "./_generated/dataModel"
 
-// Get all guests for an event
+// =============================================================================
+// Authentication Helpers
+// =============================================================================
+
+/**
+ * Get the authenticated user's ID from Clerk.
+ * Returns null if not authenticated.
+ */
+async function getAuthenticatedUserId(ctx: QueryCtx | MutationCtx): Promise<string | null> {
+  const identity = await ctx.auth.getUserIdentity()
+  return identity?.subject ?? null
+}
+
+/**
+ * Verify the current user owns an event.
+ * During migration, events without userId are accessible (backward compatibility).
+ */
+async function verifyEventOwnership(
+  ctx: QueryCtx | MutationCtx,
+  eventId: Id<"events">,
+  userId: string | null
+): Promise<void> {
+  const event = await ctx.db.get(eventId)
+  if (!event) {
+    throw new Error("Event not found")
+  }
+  if (event.userId && event.userId !== userId) {
+    throw new Error("Access denied: you do not own this event")
+  }
+}
+
+/**
+ * Verify the current user owns the event that a guest belongs to.
+ */
+async function verifyGuestOwnership(
+  ctx: QueryCtx | MutationCtx,
+  guestId: Id<"guests">,
+  userId: string | null
+): Promise<void> {
+  const guest = await ctx.db.get(guestId)
+  if (!guest) {
+    throw new Error("Guest not found")
+  }
+  await verifyEventOwnership(ctx, guest.eventId, userId)
+}
+
+// =============================================================================
+// Self-Service Token Helpers
+// =============================================================================
+
+/**
+ * Generate a URL-safe self-service token (24 characters, alphanumeric).
+ * Uses crypto-safe random bytes for security.
+ */
+function generateSelfServiceToken(): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+  let token = ''
+  for (let i = 0; i < 24; i++) {
+    token += chars.charAt(Math.floor(Math.random() * chars.length))
+  }
+  return token
+}
+
+/**
+ * Generate a unique token by checking against existing tokens.
+ * Retry up to 10 times if collision detected (extremely unlikely).
+ */
+async function generateUniqueSelfServiceToken(ctx: MutationCtx): Promise<string> {
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const token = generateSelfServiceToken()
+    const existing = await ctx.db
+      .query("guests")
+      .withIndex("by_selfServiceToken", (q) => q.eq("selfServiceToken", token))
+      .first()
+    if (!existing) {
+      return token
+    }
+  }
+  throw new Error("Failed to generate unique token after 10 attempts")
+}
+
+// Get all guests for an event (with ownership check)
 export const getByEvent = query({
   args: { eventId: v.id("events") },
   handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.eventId, userId)
+
     return await ctx.db
       .query("guests")
       .withIndex("by_event", (q) => q.eq("eventId", args.eventId))
@@ -14,7 +98,7 @@ export const getByEvent = query({
   },
 })
 
-// Get a guest by QR code ID (includes round assignments)
+// Get a guest by QR code ID (PUBLIC - used by QR scanner without auth)
 export const getByQrCodeId = query({
   args: { qrCodeId: v.string() },
   handler: async (ctx, args) => {
@@ -40,10 +124,13 @@ export const getByQrCodeId = query({
   },
 })
 
-// Get round assignments for a specific guest
+// Get round assignments for a specific guest (with ownership check)
 export const getRoundAssignments = query({
   args: { guestId: v.id("guests") },
   handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyGuestOwnership(ctx, args.guestId, userId)
+
     const assignments = await ctx.db
       .query("guestRoundAssignments")
       .withIndex("by_guest", (q) => q.eq("guestId", args.guestId))
@@ -53,10 +140,13 @@ export const getRoundAssignments = query({
   },
 })
 
-// Get all round assignments for an event (for admin view)
+// Get all round assignments for an event (with ownership check, for admin view)
 export const getAllRoundAssignmentsByEvent = query({
   args: { eventId: v.id("events") },
   handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.eventId, userId)
+
     // Get all round assignments for this event
     const assignments = await ctx.db
       .query("guestRoundAssignments")
@@ -82,7 +172,7 @@ export const getAllRoundAssignmentsByEvent = query({
   },
 })
 
-// Search guests by name (includes round assignments)
+// Search guests by name (PUBLIC - used by check-in kiosk without auth)
 // When eventId is provided, scopes search to that event (recommended for security)
 // When not provided, searches cross-event but limits results to prevent memory issues
 export const searchByName = query({
@@ -158,7 +248,7 @@ const attributesValidator = v.optional(v.object({
   customTags: v.optional(v.array(v.string())),
 }))
 
-// Add a single guest
+// Add a single guest (with ownership check)
 export const create = mutation({
   args: {
     eventId: v.id("events"),
@@ -180,6 +270,12 @@ export const create = mutation({
     isVip: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.eventId, userId)
+
+    // Generate unique self-service token
+    const selfServiceToken = await generateUniqueSelfServiceToken(ctx)
+
     return await ctx.db.insert("guests", {
       eventId: args.eventId,
       name: args.name,
@@ -195,11 +291,13 @@ export const create = mutation({
       managementLevel: args.managementLevel,
       isVip: args.isVip,
       checkedIn: false,
+      selfServiceToken,
+      rsvpStatus: "pending",
     })
   },
 })
 
-// Add multiple guests at once
+// Add multiple guests at once (with ownership check)
 export const createMany = mutation({
   args: {
     eventId: v.id("events"),
@@ -230,8 +328,14 @@ export const createMany = mutation({
     ),
   },
   handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.eventId, userId)
+
     const ids: Id<"guests">[] = []
     for (const guest of args.guests) {
+      // Generate unique self-service token for each guest
+      const selfServiceToken = await generateUniqueSelfServiceToken(ctx)
+
       const id = await ctx.db.insert("guests", {
         eventId: args.eventId,
         name: guest.name,
@@ -247,6 +351,8 @@ export const createMany = mutation({
         managementLevel: guest.managementLevel,
         isVip: guest.isVip,
         checkedIn: false,
+        selfServiceToken,
+        rsvpStatus: "pending",
       })
       ids.push(id)
     }
@@ -254,22 +360,24 @@ export const createMany = mutation({
   },
 })
 
-// Remove a guest
+// Remove a guest (with ownership check)
 export const remove = mutation({
   args: { id: v.id("guests") },
   handler: async (ctx, args) => {
-    const guest = await ctx.db.get(args.id)
-    if (!guest) {
-      throw new Error("Guest not found")
-    }
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyGuestOwnership(ctx, args.id, userId)
+
     await ctx.db.delete(args.id)
   },
 })
 
-// Remove all guests from an event
+// Remove all guests from an event (with ownership check)
 export const removeAllFromEvent = mutation({
   args: { eventId: v.id("events") },
   handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.eventId, userId)
+
     const guests = await ctx.db
       .query("guests")
       .withIndex("by_event", (q) => q.eq("eventId", args.eventId))
@@ -283,10 +391,11 @@ export const removeAllFromEvent = mutation({
   },
 })
 
-// Check in a guest
+// Check in a guest (PUBLIC - used by check-in kiosk without auth)
 export const checkIn = mutation({
   args: { id: v.id("guests") },
   handler: async (ctx, args) => {
+    // NOTE: This is intentionally public for check-in kiosk functionality
     // Get guest to check if they have an email and aren't already checked in
     const guest = await ctx.db.get(args.id)
     if (!guest) {
@@ -306,10 +415,13 @@ export const checkIn = mutation({
   },
 })
 
-// Uncheck a guest (undo check-in)
+// Uncheck a guest (undo check-in, with ownership check)
 export const uncheckIn = mutation({
   args: { id: v.id("guests") },
   handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyGuestOwnership(ctx, args.id, userId)
+
     // Clear both check-in status and confirmation email timestamp
     // so checking in again will trigger a new email
     await ctx.db.patch(args.id, {
@@ -319,7 +431,7 @@ export const uncheckIn = mutation({
   },
 })
 
-// Bulk check-in all guests for an event
+// Bulk check-in all guests for an event (with ownership check)
 export const bulkCheckIn = mutation({
   args: { eventId: v.id("events") },
   handler: async (ctx, args): Promise<{
@@ -328,7 +440,9 @@ export const bulkCheckIn = mutation({
     alreadyCheckedIn: number
     emailsQueued: number
   }> => {
-    // TODO: Add proper authentication when moving to production (requires Clerk integration)
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.eventId, userId)
+
     // Verify event exists before proceeding
     const event = await ctx.db.get(args.eventId)
     if (!event) {
@@ -382,7 +496,126 @@ export const bulkCheckIn = mutation({
   },
 })
 
-// Update a guest's information
+// Bulk check-in selected guests (with ownership check)
+export const bulkCheckInSelected = mutation({
+  args: {
+    guestIds: v.array(v.id("guests")),
+  },
+  handler: async (ctx, args): Promise<{
+    total: number
+    checkedIn: number
+    alreadyCheckedIn: number
+    emailsQueued: number
+  }> => {
+    if (args.guestIds.length === 0) {
+      return { total: 0, checkedIn: 0, alreadyCheckedIn: 0, emailsQueued: 0 }
+    }
+
+    // Get the first guest to determine event and verify ownership
+    const firstGuest = await ctx.db.get(args.guestIds[0])
+    if (!firstGuest) {
+      throw new Error("Guest not found")
+    }
+
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, firstGuest.eventId, userId)
+
+    let checkedInCount = 0
+    let alreadyCheckedInCount = 0
+    let emailsQueuedCount = 0
+
+    // Process each guest
+    for (const guestId of args.guestIds) {
+      const guest = await ctx.db.get(guestId)
+      if (!guest) continue
+
+      // Verify guest belongs to same event
+      if (guest.eventId !== firstGuest.eventId) {
+        throw new Error("All guests must belong to the same event")
+      }
+
+      if (guest.checkedIn) {
+        alreadyCheckedInCount++
+        continue
+      }
+
+      // Check in the guest
+      await ctx.db.patch(guestId, { checkedIn: true })
+      checkedInCount++
+
+      // Queue confirmation email
+      if (guest.email && !guest.confirmationSentAt && !guest.emailUnsubscribed) {
+        await ctx.scheduler.runAfter(0, api.email.sendCheckInConfirmation, {
+          guestId,
+        })
+        emailsQueuedCount++
+      }
+    }
+
+    return {
+      total: args.guestIds.length,
+      checkedIn: checkedInCount,
+      alreadyCheckedIn: alreadyCheckedInCount,
+      emailsQueued: emailsQueuedCount,
+    }
+  },
+})
+
+// Bulk undo check-in for selected guests (with ownership check)
+export const bulkUncheckIn = mutation({
+  args: {
+    guestIds: v.array(v.id("guests")),
+  },
+  handler: async (ctx, args): Promise<{
+    total: number
+    uncheckedIn: number
+    alreadyUnchecked: number
+  }> => {
+    if (args.guestIds.length === 0) {
+      return { total: 0, uncheckedIn: 0, alreadyUnchecked: 0 }
+    }
+
+    // Get the first guest to determine event and verify ownership
+    const firstGuest = await ctx.db.get(args.guestIds[0])
+    if (!firstGuest) {
+      throw new Error("Guest not found")
+    }
+
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, firstGuest.eventId, userId)
+
+    let uncheckedInCount = 0
+    let alreadyUncheckedCount = 0
+
+    // Process each guest
+    for (const guestId of args.guestIds) {
+      const guest = await ctx.db.get(guestId)
+      if (!guest) continue
+
+      // Verify guest belongs to same event
+      if (guest.eventId !== firstGuest.eventId) {
+        throw new Error("All guests must belong to the same event")
+      }
+
+      if (!guest.checkedIn) {
+        alreadyUncheckedCount++
+        continue
+      }
+
+      // Undo check-in
+      await ctx.db.patch(guestId, { checkedIn: false })
+      uncheckedInCount++
+    }
+
+    return {
+      total: args.guestIds.length,
+      uncheckedIn: uncheckedInCount,
+      alreadyUnchecked: alreadyUncheckedCount,
+    }
+  },
+})
+
+// Update a guest's information (with ownership check)
 export const update = mutation({
   args: {
     id: v.id("guests"),
@@ -409,6 +642,9 @@ export const update = mutation({
     isVip: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyGuestOwnership(ctx, args.id, userId)
+
     const { id, ...updates } = args
     // Filter out undefined values to avoid overwriting with undefined
     const filteredUpdates: Record<string, unknown> = {}
@@ -421,5 +657,455 @@ export const update = mutation({
       await ctx.db.patch(id, filteredUpdates)
     }
     return await ctx.db.get(id)
+  },
+})
+
+// =============================================================================
+// Self-Service Token Management
+// =============================================================================
+
+// Generate a self-service token for an existing guest (with ownership check)
+export const generateToken = mutation({
+  args: { guestId: v.id("guests") },
+  handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyGuestOwnership(ctx, args.guestId, userId)
+
+    const guest = await ctx.db.get(args.guestId)
+    if (!guest) {
+      throw new Error("Guest not found")
+    }
+
+    // Generate new token even if one exists (regeneration)
+    const selfServiceToken = await generateUniqueSelfServiceToken(ctx)
+    await ctx.db.patch(args.guestId, { selfServiceToken })
+
+    return { token: selfServiceToken }
+  },
+})
+
+// Bulk generate tokens for all guests in an event (with ownership check)
+export const generateTokensForEvent = mutation({
+  args: { eventId: v.id("events") },
+  handler: async (ctx, args): Promise<{
+    total: number
+    generated: number
+    skipped: number
+  }> => {
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.eventId, userId)
+
+    const guests = await ctx.db
+      .query("guests")
+      .withIndex("by_event", (q) => q.eq("eventId", args.eventId))
+      .collect()
+
+    let generated = 0
+    let skipped = 0
+
+    for (const guest of guests) {
+      // Only generate if guest doesn't have a token yet
+      if (!guest.selfServiceToken) {
+        const selfServiceToken = await generateUniqueSelfServiceToken(ctx)
+        await ctx.db.patch(guest._id, { selfServiceToken })
+        generated++
+      } else {
+        skipped++
+      }
+    }
+
+    return {
+      total: guests.length,
+      generated,
+      skipped,
+    }
+  },
+})
+
+// Get a guest by their self-service token (PUBLIC - no auth required)
+export const getBySelfServiceToken = query({
+  args: { token: v.string() },
+  handler: async (ctx, args) => {
+    // NOTE: This is intentionally public for guest self-service portal
+    const guest = await ctx.db
+      .query("guests")
+      .withIndex("by_selfServiceToken", (q) => q.eq("selfServiceToken", args.token))
+      .first()
+
+    if (!guest) return null
+
+    const event = await ctx.db.get(guest.eventId)
+    if (!event) return null
+
+    return {
+      guest: {
+        _id: guest._id,
+        name: guest.name,
+        email: guest.email,
+        phone: guest.phone,
+        dietary: guest.dietary,
+        rsvpStatus: guest.rsvpStatus,
+        tableNumber: guest.tableNumber,
+        checkedIn: guest.checkedIn,
+      },
+      event: {
+        _id: event._id,
+        name: event.name,
+        selfServiceDeadline: event.selfServiceDeadline,
+      },
+    }
+  },
+})
+
+// Update guest info via self-service portal (PUBLIC - uses token for auth)
+export const selfServiceUpdate = mutation({
+  args: {
+    token: v.string(),
+    phone: v.optional(v.string()),
+    dietary: v.optional(v.object({
+      restrictions: v.array(v.string()),
+      notes: v.optional(v.string()),
+    })),
+    rsvpStatus: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    // NOTE: This is public but requires valid token
+    const guest = await ctx.db
+      .query("guests")
+      .withIndex("by_selfServiceToken", (q) => q.eq("selfServiceToken", args.token))
+      .first()
+
+    if (!guest) {
+      throw new Error("Invalid token")
+    }
+
+    // Check deadline
+    const event = await ctx.db.get(guest.eventId)
+    if (event?.selfServiceDeadline) {
+      const deadline = new Date(event.selfServiceDeadline)
+      if (new Date() > deadline) {
+        throw new Error("The deadline for changes has passed")
+      }
+    }
+
+    // Validate RSVP status if provided
+    if (args.rsvpStatus && !["confirmed", "declined", "pending"].includes(args.rsvpStatus)) {
+      throw new Error("Invalid RSVP status")
+    }
+
+    // Track what changed for notification
+    const changedFields: string[] = []
+
+    // Build update object
+    const updates: Record<string, unknown> = {
+      lastSelfServiceUpdate: new Date().toISOString(),
+    }
+
+    if (args.phone !== undefined && args.phone !== guest.phone) {
+      updates.phone = args.phone
+      changedFields.push(args.phone ? "Phone number updated" : "Phone number removed")
+    }
+    if (args.dietary !== undefined) {
+      const oldRestrictions = guest.dietary?.restrictions || []
+      const newRestrictions = args.dietary.restrictions || []
+      const oldNotes = guest.dietary?.notes || ""
+      const newNotes = args.dietary.notes || ""
+
+      if (JSON.stringify(oldRestrictions.sort()) !== JSON.stringify(newRestrictions.sort())) {
+        changedFields.push(`Dietary restrictions: ${newRestrictions.length > 0 ? newRestrictions.join(", ") : "None"}`)
+      }
+      if (oldNotes !== newNotes) {
+        changedFields.push(newNotes ? "Dietary notes updated" : "Dietary notes removed")
+      }
+      updates.dietary = args.dietary
+    }
+    if (args.rsvpStatus !== undefined && args.rsvpStatus !== guest.rsvpStatus) {
+      updates.rsvpStatus = args.rsvpStatus
+      const statusLabels: Record<string, string> = {
+        confirmed: "Attending",
+        declined: "Not attending",
+        pending: "Undecided",
+      }
+      changedFields.push(`RSVP: ${statusLabels[args.rsvpStatus] || args.rsvpStatus}`)
+    }
+
+    await ctx.db.patch(guest._id, updates)
+
+    // Trigger notification if there were actual changes
+    if (changedFields.length > 0 && event) {
+      await ctx.scheduler.runAfter(0, internal.email.triggerGuestChangeNotification, {
+        guestId: guest._id,
+        eventId: event._id,
+        changedFields,
+      })
+    }
+
+    return { success: true }
+  },
+})
+
+// =============================================================================
+// Guest Status Management (present/no-show/late)
+// =============================================================================
+
+// Bulk update status for selected guests (with ownership check)
+export const bulkUpdateStatus = mutation({
+  args: {
+    guestIds: v.array(v.id("guests")),
+    status: v.union(
+      v.literal("present"),
+      v.literal("no-show"),
+      v.literal("late"),
+      v.null()  // null clears the status
+    ),
+  },
+  handler: async (ctx, args): Promise<{
+    total: number
+    updated: number
+  }> => {
+    if (args.guestIds.length === 0) {
+      return { total: 0, updated: 0 }
+    }
+
+    // Get the first guest to determine event and verify ownership
+    const firstGuest = await ctx.db.get(args.guestIds[0])
+    if (!firstGuest) {
+      throw new Error("Guest not found")
+    }
+
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, firstGuest.eventId, userId)
+
+    let updatedCount = 0
+
+    // Process each guest
+    for (const guestId of args.guestIds) {
+      const guest = await ctx.db.get(guestId)
+      if (!guest) continue
+
+      // Verify guest belongs to same event
+      if (guest.eventId !== firstGuest.eventId) {
+        throw new Error("All guests must belong to the same event")
+      }
+
+      // Update status (null clears it by setting to undefined)
+      await ctx.db.patch(guestId, {
+        status: args.status === null ? undefined : args.status,
+      })
+      updatedCount++
+    }
+
+    return {
+      total: args.guestIds.length,
+      updated: updatedCount,
+    }
+  },
+})
+
+// =============================================================================
+// Sample Data (Demo Guests)
+// =============================================================================
+
+// Sample data configuration
+const SAMPLE_FIRST_NAMES = [
+  'Alex', 'Jordan', 'Taylor', 'Morgan', 'Casey', 'Riley', 'Quinn', 'Avery',
+  'Skyler', 'Dakota', 'Cameron', 'Reese', 'Finley', 'Emerson', 'Parker', 'Sage',
+  'Blake', 'Jamie', 'Drew', 'Hayden', 'Rowan', 'Phoenix', 'River', 'Charlie',
+  'Addison', 'Bailey', 'Ellis', 'Kendall', 'Sydney', 'Peyton'
+]
+
+const SAMPLE_LAST_NAMES = [
+  'Chen', 'Williams', 'Patel', 'Garcia', 'Kim', 'Johnson', 'Brown', 'Singh',
+  'Anderson', 'Martinez', 'Thompson', 'Lee', 'Wilson', 'Moore', 'Taylor', 'Thomas',
+  'Jackson', 'White', 'Harris', 'Clark', 'Lewis', 'Robinson', 'Walker', 'Hall',
+  'Young', 'Allen', 'King', 'Wright', 'Scott', 'Green'
+]
+
+const SAMPLE_DEPARTMENTS = [
+  'Engineering', 'Design', 'Marketing', 'Sales', 'Product', 'Operations',
+  'HR', 'Finance', 'Legal', 'Customer Success'
+]
+
+const SAMPLE_INTERESTS = [
+  'AI/ML', 'Web Development', 'Mobile Apps', 'Cloud Infrastructure', 'DevOps',
+  'UX Design', 'Data Science', 'Cybersecurity', 'Blockchain', 'Gaming',
+  'Photography', 'Travel', 'Cooking', 'Fitness', 'Music', 'Reading'
+]
+
+const SAMPLE_GOALS = [
+  'Learn new skills', 'Meet industry peers', 'Find mentors', 'Explore new roles',
+  'Build network', 'Share knowledge', 'Discover opportunities', 'Collaborate on projects'
+]
+
+const SAMPLE_JOB_LEVELS = ['junior', 'mid', 'senior', 'lead', 'manager', 'director', 'executive']
+
+const SAMPLE_DIETARY_RESTRICTIONS = ['vegetarian', 'vegan', 'gluten-free', 'dairy-free', 'nut-free', 'halal', 'kosher']
+
+function samplePickRandom<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)]
+}
+
+function samplePickRandomMultiple<T>(arr: T[], min: number, max: number): T[] {
+  const count = min + Math.floor(Math.random() * (max - min + 1))
+  const shuffled = [...arr].sort(() => Math.random() - 0.5)
+  return shuffled.slice(0, Math.min(count, arr.length))
+}
+
+function generateSampleEmail(firstName: string, lastName: string): string {
+  const domains = ['example.com', 'demo.test', 'sample.org']
+  return `${firstName.toLowerCase()}.${lastName.toLowerCase()}@${samplePickRandom(domains)}`
+}
+
+// Add sample/demo guests to an event (with ownership check)
+export const addSampleGuests = mutation({
+  args: {
+    eventId: v.id("events"),
+    count: v.optional(v.number()), // Default 24
+  },
+  handler: async (ctx, args): Promise<{
+    added: number
+  }> => {
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.eventId, userId)
+
+    const count = args.count ?? 24
+    const usedEmails = new Set<string>()
+    const usedNames = new Set<string>()
+    const departmentCounts = new Map<string, number>()
+
+    // Initialize department counts
+    SAMPLE_DEPARTMENTS.forEach(d => departmentCounts.set(d, 0))
+
+    const guests: Array<{
+      name: string
+      email: string
+      phone: string | undefined
+      department: string
+      dietary: { restrictions: string[]; notes: string | undefined }
+      attributes: {
+        interests: string[]
+        jobLevel: string
+        goals: string[]
+        customTags: string[]
+      }
+    }> = []
+
+    // Generate unique guests
+    let attempts = 0
+    while (guests.length < count && attempts < count * 3) {
+      attempts++
+
+      const firstName = samplePickRandom(SAMPLE_FIRST_NAMES)
+      const lastName = samplePickRandom(SAMPLE_LAST_NAMES)
+      const name = `${firstName} ${lastName}`
+      const email = generateSampleEmail(firstName, lastName)
+
+      // Ensure uniqueness
+      if (usedEmails.has(email) || usedNames.has(name)) {
+        continue
+      }
+
+      // Balance department distribution
+      let department = samplePickRandom(SAMPLE_DEPARTMENTS)
+      const deptCount = departmentCounts.get(department) || 0
+      const maxPerDept = Math.ceil(count / SAMPLE_DEPARTMENTS.length) + 1
+
+      if (deptCount >= maxPerDept) {
+        const availableDept = SAMPLE_DEPARTMENTS.find(d =>
+          (departmentCounts.get(d) || 0) < maxPerDept
+        )
+        if (availableDept) department = availableDept
+      }
+
+      // ~20% have dietary restrictions
+      const hasDietary = Math.random() < 0.2
+      const restrictions = hasDietary
+        ? samplePickRandomMultiple(SAMPLE_DIETARY_RESTRICTIONS, 1, 2)
+        : []
+
+      // ~70% have phone numbers
+      const phone = Math.random() < 0.7
+        ? `(${200 + Math.floor(Math.random() * 800)}) ${200 + Math.floor(Math.random() * 800)}-${1000 + Math.floor(Math.random() * 9000)}`
+        : undefined
+
+      usedEmails.add(email)
+      usedNames.add(name)
+      departmentCounts.set(department, (departmentCounts.get(department) || 0) + 1)
+
+      guests.push({
+        name,
+        email,
+        phone,
+        department,
+        dietary: {
+          restrictions,
+          notes: hasDietary && Math.random() < 0.3 ? 'Please contact for details' : undefined,
+        },
+        attributes: {
+          interests: samplePickRandomMultiple(SAMPLE_INTERESTS, 1, 4),
+          jobLevel: samplePickRandom(SAMPLE_JOB_LEVELS),
+          goals: samplePickRandomMultiple(SAMPLE_GOALS, 1, 3),
+          customTags: ['demo'], // Mark as demo data
+        },
+      })
+    }
+
+    // Insert all guests
+    for (const guest of guests) {
+      const selfServiceToken = await generateUniqueSelfServiceToken(ctx)
+      await ctx.db.insert("guests", {
+        eventId: args.eventId,
+        name: guest.name,
+        email: guest.email,
+        phone: guest.phone,
+        department: guest.department,
+        dietary: guest.dietary,
+        attributes: guest.attributes,
+        checkedIn: false,
+        selfServiceToken,
+        rsvpStatus: "pending",
+      })
+    }
+
+    return { added: guests.length }
+  },
+})
+
+// Remove all demo guests from an event (with ownership check)
+export const removeSampleGuests = mutation({
+  args: { eventId: v.id("events") },
+  handler: async (ctx, args): Promise<{
+    removed: number
+  }> => {
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.eventId, userId)
+
+    const guests = await ctx.db
+      .query("guests")
+      .withIndex("by_event", (q) => q.eq("eventId", args.eventId))
+      .collect()
+
+    // Find guests with "demo" tag in customTags
+    const demoGuests = guests.filter(g =>
+      g.attributes?.customTags?.includes('demo')
+    )
+
+    // Delete all demo guests and their round assignments
+    for (const guest of demoGuests) {
+      // Delete round assignments first
+      const assignments = await ctx.db
+        .query("guestRoundAssignments")
+        .withIndex("by_guest", (q) => q.eq("guestId", guest._id))
+        .collect()
+
+      for (const assignment of assignments) {
+        await ctx.db.delete(assignment._id)
+      }
+
+      // Delete the guest
+      await ctx.db.delete(guest._id)
+    }
+
+    return { removed: demoGuests.length }
   },
 })

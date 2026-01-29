@@ -1,10 +1,56 @@
 import { v } from "convex/values"
-import { action, internalAction, internalMutation, internalQuery, mutation, query } from "./_generated/server"
+import { action, internalAction, internalMutation, internalQuery, mutation, query, QueryCtx, MutationCtx } from "./_generated/server"
 import { internal } from "./_generated/api"
 import type { Id, Doc } from "./_generated/dataModel"
 import { resolveThemeColors, getContrastColor } from "./themes"
 import type { ThemeColors } from "./themes"
 import { EMAIL_PRIORITY } from "./emailQueue"
+
+// =============================================================================
+// Authentication Helpers
+// =============================================================================
+
+/**
+ * Get the authenticated user's ID from Clerk.
+ * Returns null if not authenticated.
+ */
+async function getAuthenticatedUserId(ctx: QueryCtx | MutationCtx): Promise<string | null> {
+  const identity = await ctx.auth.getUserIdentity()
+  return identity?.subject ?? null
+}
+
+/**
+ * Verify the current user owns an event.
+ * During migration, events without userId are accessible (backward compatibility).
+ */
+async function verifyEventOwnership(
+  ctx: QueryCtx | MutationCtx,
+  eventId: Id<"events">,
+  userId: string | null
+): Promise<void> {
+  const event = await ctx.db.get(eventId)
+  if (!event) {
+    throw new Error("Event not found")
+  }
+  if (event.userId && event.userId !== userId) {
+    throw new Error("Access denied: you do not own this event")
+  }
+}
+
+/**
+ * Verify the current user owns the event that a guest belongs to.
+ */
+async function verifyGuestOwnership(
+  ctx: QueryCtx | MutationCtx,
+  guestId: Id<"guests">,
+  userId: string | null
+): Promise<void> {
+  const guest = await ctx.db.get(guestId)
+  if (!guest) {
+    throw new Error("Guest not found")
+  }
+  await verifyEventOwnership(ctx, guest.eventId, userId)
+}
 
 /**
  * Type guard to validate customColors has the expected shape
@@ -53,6 +99,7 @@ export const EMAIL_TYPES = {
   INVITATION: "invitation",
   CHECKIN_CONFIRMATION: "checkin_confirmation",
   REMINDER: "reminder",
+  GUEST_CHANGE_NOTIFICATION: "guest_change_notification",
 } as const
 
 // Email status constants
@@ -74,6 +121,7 @@ function replacePlaceholders(
     eventName: string
     tableNumber?: number | string
     qrCodeUrl?: string
+    guestPortalUrl?: string
     roundAssignments?: { roundNumber: number; tableNumber: number }[]
     theme?: ThemeColors
   }
@@ -102,6 +150,14 @@ function replacePlaceholders(
     result = result.replace(conditionalRegex, "")
   }
 
+  // Handle conditional blocks for guest portal: {{#if guest_portal_url}}...{{/if}}
+  const portalConditionalRegex = /\{\{#if guest_portal_url\}\}([\s\S]*?)\{\{\/if\}\}/g
+  if (data.guestPortalUrl) {
+    result = result.replace(portalConditionalRegex, "$1")
+  } else {
+    result = result.replace(portalConditionalRegex, "")
+  }
+
   // Build replacement map for single-pass replacement (more efficient at scale)
   const replacements: Record<string, string> = {
     // User content (escaped for XSS prevention)
@@ -109,6 +165,7 @@ function replacePlaceholders(
     "{{event_name}}": escapeHtml(data.eventName),
     "{{table_number}}": String(data.tableNumber || "TBD"),
     "{{qr_code_url}}": data.qrCodeUrl || "",
+    "{{guest_portal_url}}": data.guestPortalUrl || "",
     // Theme colors
     "{{primary_color}}": theme.primary,
     "{{secondary_color}}": theme.secondary,
@@ -121,7 +178,7 @@ function replacePlaceholders(
   }
 
   // Single-pass replacement using pattern matching
-  const placeholderPattern = /\{\{(?:guest_name|event_name|table_number|qr_code_url|primary_color|secondary_color|accent_color|background_color|foreground_color|muted_color|primary_text_color|secondary_text_color)\}\}/g
+  const placeholderPattern = /\{\{(?:guest_name|event_name|table_number|qr_code_url|guest_portal_url|primary_color|secondary_color|accent_color|background_color|foreground_color|muted_color|primary_text_color|secondary_text_color)\}\}/g
   result = result.replace(placeholderPattern, (match) => replacements[match] ?? match)
 
   // Handle round assignments if present (multi-round events)
@@ -180,6 +237,12 @@ const DEFAULT_TEMPLATES = {
         {{#if qr_code_url}}
         <p style="margin: 24px 0;"><a href="{{qr_code_url}}" style="display: inline-block; background: {{primary_color}}; color: {{primary_text_color}}; padding: 16px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px;">Find Your Table</a></p>
         {{/if}}
+        {{#if guest_portal_url}}
+        <div style="margin: 24px 0; padding: 16px; background: {{secondary_color}}; border-radius: 8px;">
+          <p style="margin: 0 0 12px 0; color: {{secondary_text_color}}; font-size: 14px;">Need to update your dietary requirements or RSVP status?</p>
+          <a href="{{guest_portal_url}}" style="color: {{primary_color}}; text-decoration: none; font-weight: 600; font-size: 14px;">Update Your Details &rarr;</a>
+        </div>
+        {{/if}}
         <p style="color: {{foreground_color}}; opacity: 0.8;">We look forward to seeing you!</p>
       </div>
     `,
@@ -196,6 +259,12 @@ const DEFAULT_TEMPLATES = {
           <p style="margin: 12px 0 0 0; font-size: 64px; font-weight: bold; color: {{primary_text_color}};">{{table_number}}</p>
         </div>
         {{round_assignments}}
+        {{#if guest_portal_url}}
+        <div style="margin: 24px 0; padding: 16px; background: {{secondary_color}}; border-radius: 8px;">
+          <p style="margin: 0 0 12px 0; color: {{secondary_text_color}}; font-size: 14px;">Need to update your dietary requirements?</p>
+          <a href="{{guest_portal_url}}" style="color: {{primary_color}}; text-decoration: none; font-weight: 600; font-size: 14px;">Update Your Details &rarr;</a>
+        </div>
+        {{/if}}
         <p style="color: {{foreground_color}}; opacity: 0.8; margin-top: 24px;">Enjoy the event!</p>
       </div>
     `,
@@ -335,7 +404,7 @@ export const updateEmailLogStatus = internalMutation({
 })
 
 /**
- * Send invitation email to a single guest (via queue)
+ * Send invitation email to a single guest (via queue) (with ownership check)
  * This enqueues the email for rate-limited sending
  */
 export const sendInvitation = mutation({
@@ -344,6 +413,9 @@ export const sendInvitation = mutation({
     baseUrl: v.string(),
   },
   handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyGuestOwnership(ctx, args.guestId, userId)
+
     const guest = await ctx.db.get(args.guestId)
     if (!guest) {
       throw new Error("Guest not found")
@@ -415,6 +487,11 @@ export const sendInvitationDirect = internalAction({
       ? `${args.baseUrl}/scan/${guest.qrCodeId}`
       : undefined
 
+    // Build guest portal URL (if guest has a self-service token)
+    const guestPortalUrl = guest.selfServiceToken
+      ? `${args.baseUrl}/guest/${guest.selfServiceToken}`
+      : undefined
+
     // Resolve theme colors
     const theme = getEventThemeColors(event)
 
@@ -427,6 +504,7 @@ export const sendInvitationDirect = internalAction({
         guestName: guest.name,
         eventName: event.name,
         qrCodeUrl,
+        guestPortalUrl,
         theme,
       }
     )
@@ -434,6 +512,7 @@ export const sendInvitationDirect = internalAction({
       guestName: guest.name,
       eventName: event.name,
       qrCodeUrl,
+      guestPortalUrl,
       theme,
     })
 
@@ -525,14 +604,16 @@ export const sendInvitationDirect = internalAction({
 })
 
 /**
- * Send check-in confirmation email (via queue)
+ * Send check-in confirmation email (via queue) (PUBLIC - triggered by check-in flow)
  * This enqueues the email with high priority for rate-limited sending
+ * NOTE: This is intentionally public as it's triggered by the public check-in process
  */
 export const sendCheckInConfirmation = mutation({
   args: {
     guestId: v.id("guests"),
   },
   handler: async (ctx, args) => {
+    // NOTE: No auth check - this is called from the public check-in flow
     const guest = await ctx.db.get(args.guestId)
     if (!guest) {
       return { queued: false, reason: "guest_not_found" }
@@ -573,6 +654,7 @@ export const sendCheckInConfirmation = mutation({
 export const sendCheckInConfirmationDirect = internalAction({
   args: {
     guestId: v.id("guests"),
+    baseUrl: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<{ success: boolean; resendId?: string; error?: string }> => {
     const RESEND_API_KEY = process.env.RESEND_API_KEY
@@ -603,6 +685,11 @@ export const sendCheckInConfirmationDirect = internalAction({
     const senderName = event.emailSettings?.senderName || "Seatherder"
     const senderEmail = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev"
 
+    // Build guest portal URL (if guest has a self-service token and we have baseUrl)
+    const guestPortalUrl = guest.selfServiceToken && args.baseUrl
+      ? `${args.baseUrl}/guest/${guest.selfServiceToken}`
+      : undefined
+
     // Resolve theme colors
     const theme = getEventThemeColors(event)
 
@@ -617,6 +704,7 @@ export const sendCheckInConfirmationDirect = internalAction({
         guestName: guest.name,
         eventName: event.name,
         tableNumber,
+        guestPortalUrl,
         theme,
       }
     )
@@ -624,6 +712,7 @@ export const sendCheckInConfirmationDirect = internalAction({
       guestName: guest.name,
       eventName: event.name,
       tableNumber,
+      guestPortalUrl,
       roundAssignments: roundAssignments.map((a) => ({
         roundNumber: a.roundNumber,
         tableNumber: a.tableNumber,
@@ -794,7 +883,7 @@ export const getEventForTestEmail = internalQuery({
 })
 
 /**
- * Send bulk invitation emails to all guests in an event (via queue)
+ * Send bulk invitation emails to all guests in an event (via queue) (with ownership check)
  * Enqueues all emails for rate-limited sending
  */
 export const sendBulkInvitations = mutation({
@@ -808,8 +897,9 @@ export const sendBulkInvitations = mutation({
     skipped: number
     message?: string
   }> => {
-    // TODO: Add proper authentication when moving to production (requires Clerk integration)
-    // For now, verify the event exists before proceeding
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.eventId, userId)
+
     const event = await ctx.db.get(args.eventId)
     if (!event) {
       return { success: false, queued: 0, skipped: 0, message: "Event not found" }
@@ -870,15 +960,16 @@ export const sendBulkInvitations = mutation({
 // ============================================================================
 
 /**
- * Get all email logs for an event
+ * Get all email logs for an event (with ownership check)
  */
 export const getEmailLogsByEvent = query({
   args: {
     eventId: v.id("events"),
   },
   handler: async (ctx, args) => {
-    // TODO: Add proper authentication when moving to production (requires Clerk integration)
-    // Verify user has access to this event before returning email logs
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.eventId, userId)
+
     const logs = await ctx.db
       .query("emailLogs")
       .withIndex("by_event", (q) => q.eq("eventId", args.eventId))
@@ -894,15 +985,16 @@ export const getEmailLogsByEvent = query({
 })
 
 /**
- * Get email statistics for an event
+ * Get email statistics for an event (with ownership check)
  */
 export const getEmailStats = query({
   args: {
     eventId: v.id("events"),
   },
   handler: async (ctx, args) => {
-    // TODO: Add proper authentication when moving to production (requires Clerk integration)
-    // Verify user has access to this event before returning stats
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.eventId, userId)
+
     const logs = await ctx.db
       .query("emailLogs")
       .withIndex("by_event", (q) => q.eq("eventId", args.eventId))
@@ -960,15 +1052,16 @@ export const getEmailStats = query({
 })
 
 /**
- * Get email logs for a specific guest
+ * Get email logs for a specific guest (with ownership check)
  */
 export const getEmailLogsByGuest = query({
   args: {
     guestId: v.id("guests"),
   },
   handler: async (ctx, args) => {
-    // TODO: Add proper authentication when moving to production (requires Clerk integration)
-    // Verify user has access to this guest's event before returning logs
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyGuestOwnership(ctx, args.guestId, userId)
+
     const logs = await ctx.db
       .query("emailLogs")
       .withIndex("by_guest", (q) => q.eq("guestId", args.guestId))
@@ -979,5 +1072,235 @@ export const getEmailLogsByGuest = query({
       const bTime = b.sentAt ? new Date(b.sentAt).getTime() : 0
       return bTime - aTime
     })
+  },
+})
+
+// =============================================================================
+// Guest Change Notifications
+// =============================================================================
+
+/**
+ * Get data for guest change notification email
+ */
+export const getGuestChangeNotificationData = internalQuery({
+  args: {
+    guestId: v.id("guests"),
+  },
+  handler: async (ctx, args) => {
+    const guest = await ctx.db.get(args.guestId)
+    if (!guest) return null
+
+    const event = await ctx.db.get(guest.eventId)
+    if (!event) return null
+
+    return {
+      guest: {
+        _id: guest._id,
+        name: guest.name,
+        email: guest.email,
+        phone: guest.phone,
+        rsvpStatus: guest.rsvpStatus,
+        dietary: guest.dietary,
+      },
+      event: {
+        _id: event._id,
+        name: event.name,
+        emailSettings: event.emailSettings,
+        themePreset: event.themePreset,
+        customColors: event.customColors,
+      },
+    }
+  },
+})
+
+/**
+ * Send guest change notification email to organizer
+ */
+export const sendGuestChangeNotificationDirect = internalAction({
+  args: {
+    guestId: v.id("guests"),
+    changedFields: v.array(v.string()),
+  },
+  handler: async (ctx, args): Promise<{ success: boolean; error?: string }> => {
+    const RESEND_API_KEY = process.env.RESEND_API_KEY
+    if (!RESEND_API_KEY) {
+      return { success: false, error: "RESEND_API_KEY is not configured" }
+    }
+
+    // Get guest and event data
+    const data = await ctx.runQuery(internal.email.getGuestChangeNotificationData, {
+      guestId: args.guestId,
+    })
+    if (!data) {
+      return { success: false, error: "Guest or event not found" }
+    }
+
+    const { guest, event } = data
+    const organizerEmail = event.emailSettings?.replyTo
+    if (!organizerEmail) {
+      return { success: false, error: "No organizer email configured" }
+    }
+
+    // Resolve theme colors
+    const theme = getEventThemeColors(event as unknown as Doc<"events">)
+    const primaryTextColor = getContrastColor(theme.primary)
+
+    // Build changes summary
+    const changesHtml = args.changedFields
+      .map((field) => `<li style="margin: 4px 0;">${escapeHtml(field)}</li>`)
+      .join("")
+
+    // Build email HTML
+    const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: ${theme.background};">
+  <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+    <div style="background: ${theme.secondary}; border-radius: 12px; padding: 32px; margin-bottom: 24px;">
+      <h1 style="margin: 0 0 8px; font-size: 24px; color: ${getContrastColor(theme.secondary)};">Guest Update</h1>
+      <p style="margin: 0; color: ${getContrastColor(theme.secondary)}; opacity: 0.8;">${escapeHtml(event.name)}</p>
+    </div>
+
+    <div style="background: white; border-radius: 12px; padding: 32px; border: 1px solid ${theme.muted};">
+      <p style="margin: 0 0 16px; color: ${theme.foreground};">
+        <strong>${escapeHtml(guest.name)}</strong> has updated their information:
+      </p>
+
+      <ul style="margin: 0 0 24px; padding-left: 24px; color: ${theme.foreground};">
+        ${changesHtml}
+      </ul>
+
+      <div style="background: ${theme.secondary}; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
+        <p style="margin: 0 0 8px; font-size: 14px; color: ${getContrastColor(theme.secondary)};">
+          <strong>Current Details:</strong>
+        </p>
+        ${guest.rsvpStatus ? `<p style="margin: 4px 0; font-size: 14px; color: ${getContrastColor(theme.secondary)};">RSVP: ${guest.rsvpStatus}</p>` : ""}
+        ${guest.phone ? `<p style="margin: 4px 0; font-size: 14px; color: ${getContrastColor(theme.secondary)};">Phone: ${escapeHtml(guest.phone)}</p>` : ""}
+        ${guest.dietary?.restrictions?.length ? `<p style="margin: 4px 0; font-size: 14px; color: ${getContrastColor(theme.secondary)};">Dietary: ${guest.dietary.restrictions.join(", ")}</p>` : ""}
+        ${guest.dietary?.notes ? `<p style="margin: 4px 0; font-size: 14px; color: ${getContrastColor(theme.secondary)};">Notes: ${escapeHtml(guest.dietary.notes)}</p>` : ""}
+      </div>
+
+      <p style="margin: 0; font-size: 12px; color: ${theme.foreground}; opacity: 0.6;">
+        Updated at ${new Date().toLocaleString()}
+      </p>
+    </div>
+
+    <p style="margin: 24px 0 0; text-align: center; font-size: 12px; color: ${theme.foreground}; opacity: 0.5;">
+      Sent by Seatherder
+    </p>
+  </div>
+</body>
+</html>`
+
+    // Send via Resend
+    try {
+      const senderEmail = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev"
+      const response = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${RESEND_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          from: `Seatherder <${senderEmail}>`,
+          to: organizerEmail,
+          subject: `Guest Update: ${guest.name} - ${event.name}`,
+          html,
+        }),
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        // Log failure
+        await ctx.runMutation(internal.email.logEmail, {
+          eventId: event._id,
+          guestId: guest._id,
+          type: EMAIL_TYPES.GUEST_CHANGE_NOTIFICATION,
+          status: EMAIL_STATUS.FAILED,
+          recipientEmail: organizerEmail,
+          errorMessage: result.message || "Unknown error",
+        })
+        return { success: false, error: result.message || "Failed to send email" }
+      }
+
+      // Log success
+      await ctx.runMutation(internal.email.logEmail, {
+        eventId: event._id,
+        guestId: guest._id,
+        type: EMAIL_TYPES.GUEST_CHANGE_NOTIFICATION,
+        status: EMAIL_STATUS.SENT,
+        resendId: result.id,
+        recipientEmail: organizerEmail,
+      })
+
+      return { success: true }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error"
+      await ctx.runMutation(internal.email.logEmail, {
+        eventId: event._id,
+        guestId: guest._id,
+        type: EMAIL_TYPES.GUEST_CHANGE_NOTIFICATION,
+        status: EMAIL_STATUS.FAILED,
+        recipientEmail: organizerEmail,
+        errorMessage: message,
+      })
+      return { success: false, error: message }
+    }
+  },
+})
+
+/**
+ * Trigger guest change notification (called from selfServiceUpdate in guests.ts)
+ * This is an internal mutation that schedules the notification action
+ */
+export const triggerGuestChangeNotification = internalMutation({
+  args: {
+    guestId: v.id("guests"),
+    eventId: v.id("events"),
+    changedFields: v.array(v.string()),
+  },
+  handler: async (ctx, args): Promise<{ sent: boolean; reason?: string }> => {
+    // Check if notifications are enabled for this event
+    const event = await ctx.db.get(args.eventId)
+    if (!event) {
+      return { sent: false, reason: "Event not found" }
+    }
+    if (!event.selfServiceNotificationsEnabled) {
+      return { sent: false, reason: "Notifications disabled" }
+    }
+    if (!event.emailSettings?.replyTo) {
+      return { sent: false, reason: "No organizer email (replyTo) configured" }
+    }
+
+    // Check for recent notification (within 1 hour) - rate limiting
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString()
+    const recentLogs = await ctx.db
+      .query("emailLogs")
+      .withIndex("by_guest", (q) => q.eq("guestId", args.guestId))
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("type"), EMAIL_TYPES.GUEST_CHANGE_NOTIFICATION),
+          q.gte(q.field("sentAt"), oneHourAgo)
+        )
+      )
+      .collect()
+
+    if (recentLogs.length > 0) {
+      console.log(`Skipping guest change notification: Rate limited (sent within last hour)`)
+      return { sent: false, reason: "Rate limited (sent within last hour)" }
+    }
+
+    // Schedule the notification action
+    await ctx.scheduler.runAfter(0, internal.email.sendGuestChangeNotificationDirect, {
+      guestId: args.guestId,
+      changedFields: args.changedFields,
+    })
+
+    return { sent: true }
   },
 })
