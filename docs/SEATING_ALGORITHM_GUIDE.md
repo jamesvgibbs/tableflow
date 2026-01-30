@@ -187,16 +187,92 @@ The Repeat Avoidance weight controls how strongly I avoid previous tablemates. A
 
 ---
 
-## Wedding & Special Event Types
+## Weddings
 
-When you select a specific event type in the wizard, I adjust my approach:
+Weddings are different. I turn off the corporate weights (interest affinity, job level, networking goals) and focus on what actually matters: **families** and **sides**.
 
-- **Wedding:** I can keep families together or mix them, respect bride/groom sides, and handle VIP tables
-- **Corporate:** I focus on company/department mixing and job level considerations
-- **Team Building:** I can break up existing teams or keep them together based on your goals
-- **Social/Dinner Party:** I handle couples (together, apart, or same table but not adjacent)
+### How I Group Wedding Guests
 
-The wizard asks you questions in plain language and I translate your answers into the right weights.
+For weddings, I use **Family Name** instead of department. All the Johnsons are one group. All the Garcias are another. This is the foundation of wedding seating.
+
+I also track **Side** (bride or groom) when you want to respect traditional seating divisions.
+
+### The 3 Wedding Questions
+
+When you select Wedding in the wizard, I ask:
+
+#### 1. Same last name, same table?
+
+| Answer | What I do |
+|--------|-----------|
+| **Keep families together** | The Johnsons sit with the Johnsons. Less chaos, more comfort. |
+| **Mix them up** | Uncle Bob meets Aunt Sue's coworker. More interesting, helps the families blend. |
+| **Keep immediate family only** | Parents with their kids. Cousins can roam. A middle ground. |
+
+#### 2. Bride's side meets groom's side?
+
+| Answer | What I do |
+|--------|-----------|
+| **Keep sides separate** | Traditional. Each side with their own people. |
+| **Mix the sides** | They are one family now. I will introduce them. |
+| **Mix a little** | Some shared tables, some separate. A balance. |
+
+#### 3. VIP tables?
+
+| Answer | What I do |
+|--------|-----------|
+| **Yes, I have VIPs** | You mark the VIPs and tell me which tables are special. I will not seat random guests there. |
+| **No VIPs** | Everyone is equal. I like this approach. |
+
+### Wedding Weight Settings
+
+When you answer the wedding questions, I set the weights like this:
+
+| Weight | Wedding Setting | Why |
+|--------|-----------------|-----|
+| Department Mix | -0.9 to 0.8 | Controls family grouping (negative = keep together) |
+| Interest Affinity | 0 | Turned off. Irrelevant for weddings. |
+| Job Level Diversity | 0 | Turned off. Grandma does not care about org charts. |
+| Goal Compatibility | 0 | Turned off. No one is networking at your wedding. |
+| Repeat Avoidance | 0.5 | Lower than corporate events. Weddings rarely have multiple rounds. |
+
+### Wedding Tips
+
+- **Use Pin constraints** for the head table. Pin the wedding party to Table 1.
+- **Use Repel constraints** for guests who should not be near each other. I do not ask questions.
+- **Mark plus-ones** with the same family name as their partner so I keep them together.
+- **Assign sides** if you want traditional bride/groom separation. Leave blank for mixed seating.
+
+---
+
+## Other Event Types
+
+### Corporate Conference
+
+I focus on company/department mixing and job level considerations. The wizard asks about:
+- Same company together or apart?
+- Mix executives with everyone?
+- How many rounds?
+
+### Team Building
+
+I can break up existing teams or keep them together. The wizard asks about:
+- Break up existing teams?
+- Managers with their direct reports?
+
+### Dinner Party / Social
+
+I handle couples smartly. The wizard asks about:
+- Couples together, apart, or same table but not adjacent?
+- Group by interests?
+
+### Custom / Something Else
+
+You tell me what matters. I ask about:
+- What is the primary goal?
+- Does seniority matter?
+
+The wizard asks questions in plain language. I translate your answers into the right weights.
 
 ---
 
