@@ -23,6 +23,8 @@ import { Check, Loader2, RotateCcw, History } from "lucide-react"
 
 interface MatchingConfigProps {
   eventId: Id<"events">
+  /** Optional weights to use as initial values (e.g., from wizard calculations) */
+  initialWeights?: MatchingWeights
 }
 
 // Descriptions for each weight
@@ -58,7 +60,7 @@ const WEIGHT_ORDER: (keyof MatchingWeights)[] = [
   "repeatAvoidance",
 ]
 
-export function MatchingConfig({ eventId }: MatchingConfigProps) {
+export function MatchingConfig({ eventId, initialWeights }: MatchingConfigProps) {
   const config = useQuery(api.matchingConfig.getByEventWithDefaults, { eventId })
   const updateWeights = useMutation(api.matchingConfig.updateWeights)
   const updateNoveltyPreference = useMutation(api.matchingConfig.updateNoveltyPreference)
@@ -69,15 +71,32 @@ export function MatchingConfig({ eventId }: MatchingConfigProps) {
   const [saving, setSaving] = React.useState(false)
   const [saved, setSaved] = React.useState(false)
 
-  // Initialize local weights and novelty when config loads
+  // Track if we've initialized from initialWeights
+  const initializedFromProps = React.useRef(false)
+
+  // Initialize local weights - prefer initialWeights prop over database config
   React.useEffect(() => {
-    if (config?.weights && !localWeights) {
+    if (initialWeights && !initializedFromProps.current) {
+      setLocalWeights(initialWeights)
+      initializedFromProps.current = true
+    } else if (config?.weights && !localWeights && !initialWeights) {
       setLocalWeights(config.weights)
     }
+  }, [config, localWeights, initialWeights])
+
+  // Update local weights when initialWeights prop changes (wizard answers change)
+  React.useEffect(() => {
+    if (initialWeights && initializedFromProps.current) {
+      setLocalWeights(initialWeights)
+    }
+  }, [initialWeights])
+
+  // Initialize novelty from config
+  React.useEffect(() => {
     if (config && localNovelty === null) {
       setLocalNovelty(config.noveltyPreference ?? 0.5)
     }
-  }, [config, localWeights, localNovelty])
+  }, [config, localNovelty])
 
   // Show loading state
   if (!config) {

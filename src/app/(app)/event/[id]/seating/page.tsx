@@ -5,14 +5,20 @@ import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { Id } from "@convex/_generated/dataModel";
-import { ArrowLeft, Check } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, Settings2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SeatingTypeSelector } from "@/components/seating-type-selector";
 import { SeatingQuestionFlow } from "@/components/seating-question-flow";
 import { SeatingConfirmation } from "@/components/seating-confirmation";
 import { SeatherderLoading } from "@/components/seatherder-loading";
+import { MatchingConfig } from "@/components/matching-config";
 import {
   SEATING_EVENT_TYPES,
   QUESTIONS_BY_TYPE,
@@ -35,6 +41,7 @@ export default function SeatingWizardPage({ params }: PageProps) {
   );
   const [answers, setAnswers] = React.useState<Record<string, string>>({});
   const [saving, setSaving] = React.useState(false);
+  const [advancedOpen, setAdvancedOpen] = React.useState(false);
 
   // Load params on mount
   React.useEffect(() => {
@@ -112,6 +119,13 @@ export default function SeatingWizardPage({ params }: PageProps) {
       setSaving(false);
     }
   };
+
+  // Calculate preview weights from wizard answers (memoized to prevent re-renders)
+  // Must be before early returns to satisfy React hooks rules
+  const wizardWeights = React.useMemo(() => {
+    if (!seatingType) return undefined;
+    return mapAnswersToConfig(seatingType, answers).weights;
+  }, [seatingType, answers]);
 
   // Loading state
   if (!eventId || event === undefined) {
@@ -199,6 +213,41 @@ export default function SeatingWizardPage({ params }: PageProps) {
               onBack={handleBack}
               saving={saving}
             />
+          )}
+
+          {/* Advanced Settings - available after selecting a type */}
+          {eventId && seatingType && (step === "questions" || step === "confirm") && (
+            <Collapsible
+              open={advancedOpen}
+              onOpenChange={setAdvancedOpen}
+              className="mt-8 pt-6 border-t"
+            >
+              <CollapsibleTrigger asChild>
+                <Button
+                  variant="ghost"
+                  className="w-full justify-between text-muted-foreground hover:text-foreground"
+                >
+                  <span className="flex items-center gap-2">
+                    <Settings2 className="h-4 w-4" />
+                    Advanced Settings
+                  </span>
+                  <ChevronDown
+                    className={`h-4 w-4 transition-transform ${
+                      advancedOpen ? "rotate-180" : ""
+                    }`}
+                  />
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="pt-4">
+                <p className="text-sm text-muted-foreground mb-4">
+                  These are the weights calculated from your answers above. Adjust them if you want finer control.
+                </p>
+                <MatchingConfig
+                  eventId={eventId}
+                  initialWeights={wizardWeights}
+                />
+              </CollapsibleContent>
+            </Collapsible>
           )}
         </div>
 
