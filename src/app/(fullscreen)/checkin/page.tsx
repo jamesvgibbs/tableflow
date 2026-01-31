@@ -21,7 +21,7 @@ import QRCode from 'qrcode'
 import { resolveThemeColors, ThemeColors, getDefaultTheme } from '@/lib/theme-presets'
 import { DietaryBadges } from '@/components/dietary-badge'
 import type { DietaryInfo } from '@/lib/types'
-import { getTableLabel, getGuestLabel } from '@/lib/terminology'
+import { getTableLabel } from '@/lib/terminology'
 
 // Types for search results from Convex
 interface RoundAssignment {

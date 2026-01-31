@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LayoutDashboard, Settings } from "lucide-react"
+import { LayoutDashboard } from "lucide-react"
 import { cn } from "@/lib/utils"
 import {
   Tooltip,

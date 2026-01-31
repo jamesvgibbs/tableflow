@@ -38,7 +38,6 @@ export function PresentationMode({
   roundStartedAt,
   roundDuration,
   isPaused,
-  timeRemaining,
   minutes,
   seconds,
   isExpired,

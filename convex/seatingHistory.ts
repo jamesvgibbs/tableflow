@@ -1,6 +1,5 @@
 import { v } from "convex/values"
 import { mutation, query, QueryCtx, MutationCtx } from "./_generated/server"
-import type { Id } from "./_generated/dataModel"
 
 // =============================================================================
 // Authentication Helpers

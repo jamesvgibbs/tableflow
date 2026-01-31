@@ -1,7 +1,6 @@
 import { v } from "convex/values"
 import { mutation, internalMutation, internalQuery, internalAction } from "./_generated/server"
 import { internal } from "./_generated/api"
-import type { Id } from "./_generated/dataModel"
 
 // Priority levels (lower = higher priority)
 export const EMAIL_PRIORITY = {

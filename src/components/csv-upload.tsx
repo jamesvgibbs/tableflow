@@ -30,7 +30,6 @@ import {
   type JobLevel,
   type NetworkingGoal,
 } from "@/lib/types"
-import type { SeatingEventType } from "@/lib/seating-types"
 
 interface CsvUploadProps {
   onImportGuests: (
@@ -56,8 +55,6 @@ interface CsvUploadProps {
   guestLabel?: string
   /** Plural label for guests (default: "guests") */
   guestLabelPlural?: string
-  /** Seating event type to show relevant columns */
-  seatingType?: SeatingEventType | null
 }
 
 type ColumnMapping = {
@@ -309,7 +306,6 @@ export function CsvUpload({
   departmentLabel = "Department",
   guestLabel = "guest",
   guestLabelPlural = "guests",
-  seatingType,
 }: CsvUploadProps) {
   const [file, setFile] = React.useState<File | null>(null)
   const [headers, setHeaders] = React.useState<string[]>([])

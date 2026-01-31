@@ -357,7 +357,7 @@ export const generatePreview = mutation({
       }
 
       // Update tablemate history
-      for (const [_, tableGuests] of tables) {
+      for (const [, tableGuests] of tables) {
         for (const guest of tableGuests) {
           const guestHistory = tablemateHistory.get(guest._id.toString())!
           for (const mate of tableGuests) {
@@ -473,7 +473,7 @@ function calculateConstraintViolations(
   for (const pair of constraints.attracts) {
     const [guest1, guest2] = pair.split("-")
     let togetherOnce = false
-    for (const [_, guests] of byRoundAndTable) {
+    for (const [, guests] of byRoundAndTable) {
       if (guests.has(guest1) && guests.has(guest2)) {
         togetherOnce = true
         break

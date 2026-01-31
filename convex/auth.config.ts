@@ -6,7 +6,7 @@
  *
  * @see https://docs.convex.dev/auth/clerk
  */
-export default {
+const authConfig = {
   providers: [
     {
       // The domain should match your Clerk Frontend API URL
@@ -17,3 +17,5 @@ export default {
     },
   ],
 };
+
+export default authConfig;

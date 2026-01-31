@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useSyncExternalStore, useCallback } from "react"
+import { useMemo, useSyncExternalStore, useEffect, useRef } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useQuery } from "convex/react"
@@ -19,26 +19,24 @@ interface SidebarRecentEventsProps {
 }
 
 // Create a simple store for recent events that works with useSyncExternalStore
-let listeners: Array<() => void> = []
-let cachedEvents: RecentEvent[] = []
+const listeners: Set<() => void> = new Set()
+let cachedEvents: RecentEvent[] | null = null
 
 function emitChange() {
   cachedEvents = getRecentEvents()
-  for (const listener of listeners) {
-    listener()
-  }
+  listeners.forEach((listener) => listener())
 }
 
 function subscribe(listener: () => void) {
-  listeners = [...listeners, listener]
+  listeners.add(listener)
   return () => {
-    listeners = listeners.filter((l) => l !== listener)
+    listeners.delete(listener)
   }
 }
 
 function getSnapshot(): RecentEvent[] {
   if (typeof window === "undefined") return []
-  if (cachedEvents.length === 0) {
+  if (cachedEvents === null) {
     cachedEvents = getRecentEvents()
   }
   return cachedEvents
@@ -50,6 +48,7 @@ function getServerSnapshot(): RecentEvent[] {
 
 export function SidebarRecentEvents({ isCollapsed }: SidebarRecentEventsProps) {
   const pathname = usePathname()
+  const syncedRef = useRef(false)
 
   // Query all events to sync names
   const allEvents = useQuery(api.events.list)
@@ -57,15 +56,9 @@ export function SidebarRecentEvents({ isCollapsed }: SidebarRecentEventsProps) {
   // Use useSyncExternalStore to read from localStorage without effect setState warnings
   const storedEvents = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
 
-  // Refresh when pathname changes (triggers re-render to pick up new events)
-  const refreshKey = pathname
-
-  // Sync event names with database and compute final list
-  const recentEvents = useMemo(() => {
-    // Re-read when refreshKey changes
-    void refreshKey
-
-    if (!allEvents) return storedEvents
+  // Sync event names with database - use useEffect to avoid render-time side effects
+  useEffect(() => {
+    if (!allEvents || syncedRef.current) return
 
     let hasChanges = false
     const currentEvents = getRecentEvents()
@@ -85,13 +78,31 @@ export function SidebarRecentEvents({ isCollapsed }: SidebarRecentEventsProps) {
 
     // If we made changes, emit to update the store
     if (hasChanges) {
-      // Schedule emit for after render
-      setTimeout(emitChange, 0)
-      return getRecentEvents()
+      emitChange()
     }
 
-    return currentEvents
-  }, [allEvents, storedEvents, refreshKey])
+    syncedRef.current = true
+  }, [allEvents])
+
+  // Reset sync flag when events list changes
+  useEffect(() => {
+    syncedRef.current = false
+  }, [allEvents?.length])
+
+  // Refresh cache when pathname changes
+  useEffect(() => {
+    emitChange()
+  }, [pathname])
+
+  // Compute final list from stored events
+  const recentEvents = useMemo(() => {
+    if (!allEvents) return storedEvents
+
+    // Filter out events that no longer exist in the database
+    return storedEvents.filter((stored) =>
+      allEvents.some((e) => e._id === stored.id)
+    )
+  }, [allEvents, storedEvents])
 
   if (recentEvents.length === 0 || isCollapsed) {
     return null

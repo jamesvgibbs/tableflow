@@ -1143,7 +1143,7 @@ export const sendGuestChangeNotificationDirect = internalAction({
 
     // Resolve theme colors
     const theme = getEventThemeColors(event as unknown as Doc<"events">)
-    const primaryTextColor = getContrastColor(theme.primary)
+    // Note: primaryTextColor available as getContrastColor(theme.primary) if needed
 
     // Build changes summary
     const changesHtml = args.changedFields

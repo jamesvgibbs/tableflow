@@ -29,7 +29,7 @@ import JSZip from 'jszip'
 
 import { generateQrCodeBlob } from '@/lib/qr-download'
 import { cn } from '@/lib/utils'
-import { resolveThemeColors, type ThemeColors } from '@/lib/theme-presets'
+import { resolveThemeColors } from '@/lib/theme-presets'
 import { getThemedStyles } from '@/lib/theme-utils'
 import { getTableLabel, getTableLabelPlural, getGuestLabel, getGuestLabelPlural, getDepartmentLabel } from '@/lib/terminology'
 import type { DietaryInfo } from '@/lib/types'
@@ -96,7 +96,6 @@ export default function LiveEventPage({ params }: PageProps) {
 
   // Round management state
   const [selectedRound, setSelectedRound] = React.useState(1)
-  const [roundDuration, setRoundDuration] = React.useState<number | undefined>(undefined)
 
   // Guest view state
   const [searchQuery, setSearchQuery] = React.useState('')
@@ -174,7 +173,6 @@ export default function LiveEventPage({ params }: PageProps) {
   // Sync event data with state when loaded
   React.useEffect(() => {
     if (event) {
-      setRoundDuration(event.roundDuration)
       // Set selected round to current active round if one is active
       if (event.currentRound && event.currentRound > 0) {
         setSelectedRound(event.currentRound)
@@ -185,8 +183,6 @@ export default function LiveEventPage({ params }: PageProps) {
   // Update round duration
   const handleUpdateRoundDuration = React.useCallback(
     async (newDuration: number | undefined) => {
-      setRoundDuration(newDuration)
-
       try {
         await updateRoundSettings({ id: eventId, roundDuration: newDuration || 0 })
       } catch {

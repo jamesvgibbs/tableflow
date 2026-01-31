@@ -36,7 +36,6 @@ import {
   Maximize,
   RotateCcw,
   Move,
-  GripVertical,
 } from "lucide-react"
 import { useGesture } from "@use-gesture/react"
 

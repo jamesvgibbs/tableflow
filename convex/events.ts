@@ -21,16 +21,6 @@ async function getAuthenticatedUserId(ctx: QueryCtx | MutationCtx): Promise<stri
   return identity?.subject ?? null
 }
 
-/**
- * Require authentication - throws if not authenticated.
- */
-async function requireAuth(ctx: QueryCtx | MutationCtx): Promise<string> {
-  const userId = await getAuthenticatedUserId(ctx)
-  if (!userId) {
-    throw new Error("Authentication required")
-  }
-  return userId
-}
 
 /**
  * Verify the current user owns an event.
@@ -1151,7 +1141,6 @@ export const assignTables = mutation({
 
         // Round-robin distribution with constraint awareness
         const departments = shuffleArray(Object.keys(byDepartment))
-        let tableIndex = 0
 
         for (const dept of departments) {
           for (const guest of byDepartment[dept]) {
@@ -1184,7 +1173,6 @@ export const assignTables = mutation({
             if (bestTable >= 0) {
               tables[bestTable].push(guest)
               roundAssignment.set(guest._id, bestTable + 1)
-              tableIndex = (bestTable + 1) % numTables
             }
           }
         }

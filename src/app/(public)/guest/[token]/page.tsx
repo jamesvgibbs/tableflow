@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo } from "react"
+import { useState } from "react"
 import { useParams } from "next/navigation"
 import { useQuery } from "convex/react"
 import { api } from "@convex/_generated/api"
@@ -17,9 +17,8 @@ export default function GuestPortalPage() {
 
   const data = useQuery(api.guests.getBySelfServiceToken, { token })
 
-  // Memoize current time to avoid Date.now() during render
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const now = useMemo(() => Date.now(), [])
+  // Capture render time once using lazy initialization
+  const [now] = useState(() => Date.now())
 
   // Loading state
   if (data === undefined) {

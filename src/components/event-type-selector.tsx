@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { cn } from "@/lib/utils"
-import { EVENT_TYPES, EVENT_TYPE_IDS, type EventTypeDefinition } from "@/lib/event-types"
+import { EVENT_TYPES, EVENT_TYPE_IDS } from "@/lib/event-types"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 
