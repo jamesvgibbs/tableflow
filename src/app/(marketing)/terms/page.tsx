@@ -1,7 +1,6 @@
-import { Metadata } from "next";
-import Link from "next/link";
 import { ArrowLeft, Mail } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import type { Metadata } from "next";
+import Link from "next/link";
 import {
   BulletList,
   ContactCard,
@@ -14,10 +13,12 @@ import {
   SubSection,
   TableOfContents,
 } from "@/components/legal-content";
+import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
   title: "Terms of Service | Seatherder",
-  description: "Terms of service for using Seatherder event seating management.",
+  description:
+    "Terms of service for using Seatherder event seating management.",
 };
 
 export default function TermsPage() {
@@ -164,7 +165,10 @@ export default function TermsPage() {
           </ImportantNotice>
         </Section>
 
-        <Section id="subscription-and-payments" title="6. Subscription and Payments">
+        <Section
+          id="subscription-and-payments"
+          title="6. Subscription and Payments"
+        >
           <SubSection title="Subscription Plans">
             <Paragraph>
               Some features of the Service require a paid subscription. By
@@ -189,7 +193,8 @@ export default function TermsPage() {
 
           <SubSection title="Refunds">
             <Paragraph>
-              Refunds are provided at our discretion. We may provide refunds for:
+              Refunds are provided at our discretion. We may provide refunds
+              for:
             </Paragraph>
             <BulletList
               items={[
@@ -223,7 +228,10 @@ export default function TermsPage() {
           </Paragraph>
         </Section>
 
-        <Section id="disclaimer-of-warranties" title="8. Disclaimer of Warranties">
+        <Section
+          id="disclaimer-of-warranties"
+          title="8. Disclaimer of Warranties"
+        >
           <ImportantNotice>
             THE SERVICE IS PROVIDED &quot;AS IS&quot; WITHOUT WARRANTIES OF ANY
             KIND, EITHER EXPRESS OR IMPLIED. WE DO NOT GUARANTEE THAT THE
@@ -236,7 +244,10 @@ export default function TermsPage() {
           </ImportantNotice>
         </Section>
 
-        <Section id="limitation-of-liability" title="9. Limitation of Liability">
+        <Section
+          id="limitation-of-liability"
+          title="9. Limitation of Liability"
+        >
           <ImportantNotice>
             TO THE MAXIMUM EXTENT PERMITTED BY LAW, SEATHERDER SHALL NOT BE
             LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR

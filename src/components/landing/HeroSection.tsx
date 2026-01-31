@@ -51,7 +51,7 @@ export const HeroSection = () => {
               {/* Static decorative elements around the dog */}
               {["💕", "🐾", "⭐"].map((emoji, i) => (
                 <span
-                  key={i}
+                  key={emoji}
                   className="absolute text-2xl opacity-80"
                   style={{
                     top: `${20 + i * 25}%`,

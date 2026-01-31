@@ -59,7 +59,7 @@ export const ProblemSection = () => {
             <div className="space-y-4">
               {problems.map((problem, index) => (
                 <motion.div
-                  key={index}
+                  key={problem.text}
                   initial={{ opacity: 0, x: -20 }}
                   whileInView={{ opacity: 1, x: 0 }}
                   viewport={{ once: true }}

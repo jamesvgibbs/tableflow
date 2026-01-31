@@ -1,7 +1,6 @@
-import { Metadata } from "next";
-import Link from "next/link";
 import { ArrowLeft, Mail, Shield } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import type { Metadata } from "next";
+import Link from "next/link";
 import {
   BulletList,
   ContactCard,
@@ -14,6 +13,7 @@ import {
   SubSection,
   TableOfContents,
 } from "@/components/legal-content";
+import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
   title: "Privacy Policy | Seatherder",
@@ -182,10 +182,7 @@ export default function PrivacyPage() {
                   "Analytics cookies",
                   "Help us understand how you use the Service",
                 ],
-                [
-                  "Preference cookies",
-                  "Remember your settings and choices",
-                ],
+                ["Preference cookies", "Remember your settings and choices"],
               ]}
             />
             <Paragraph>
@@ -287,7 +284,10 @@ export default function PrivacyPage() {
           </Paragraph>
         </Section>
 
-        <Section id="international-transfers" title="9. International Transfers">
+        <Section
+          id="international-transfers"
+          title="9. International Transfers"
+        >
           <Paragraph>
             Your data may be transferred to and processed in countries other
             than your own. We ensure appropriate safeguards are in place for
@@ -304,10 +304,7 @@ export default function PrivacyPage() {
           </Paragraph>
         </Section>
 
-        <Section
-          id="changes-to-this-policy"
-          title="11. Changes to This Policy"
-        >
+        <Section id="changes-to-this-policy" title="11. Changes to This Policy">
           <Paragraph>
             We may update this Privacy Policy from time to time. We will notify
             you of significant changes by posting a notice on the Service or
