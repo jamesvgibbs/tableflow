@@ -2,12 +2,12 @@
 
 import { motion } from "framer-motion";
 import {
-  Repeat,
-  Shuffle,
-  Palette,
-  ScanLine,
-  Utensils,
   FileSpreadsheet,
+  Palette,
+  Repeat,
+  ScanLine,
+  Shuffle,
+  Utensils,
 } from "lucide-react";
 
 const features = [
@@ -89,7 +89,7 @@ export const FeaturesSection = () => {
                 {/* Icon badge */}
                 <div className="flex items-center gap-3 mb-4 group-hover:scale-105 transition-transform">
                   <div
-                    className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${feature.gradient} flex items-center justify-center shadow-soft group-hover:shadow-glow transition-shadow`}
+                    className={`w-14 h-14 rounded-2xl bg-linear-to-br ${feature.gradient} flex items-center justify-center shadow-soft group-hover:shadow-glow transition-shadow`}
                   >
                     <feature.icon className="w-7 h-7 text-white" />
                   </div>

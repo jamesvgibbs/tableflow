@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, IBM_Plex_Mono, Inter_Tight } from "next/font/google";
+import { ClerkProvider } from "@clerk/nextjs";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { Providers } from "@/components/providers";
+import { CookieConsent } from "@/components/cookie-consent";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -41,10 +43,13 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${ibmPlexMono.variable} ${interTight.variable} antialiased`}
       >
-        <Providers>
-          {children}
-          <Toaster />
-        </Providers>
+        <ClerkProvider>
+          <Providers>
+            {children}
+            <Toaster />
+            <CookieConsent />
+          </Providers>
+        </ClerkProvider>
       </body>
     </html>
   );

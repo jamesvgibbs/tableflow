@@ -7,7 +7,6 @@ import { useQuery, useMutation } from "convex/react"
 import { api } from "@convex/_generated/api"
 import { Id, Doc } from "@convex/_generated/dataModel"
 import {
-  ArrowLeft,
   Users,
   Shuffle,
   RotateCcw,
@@ -17,22 +16,17 @@ import {
   Play,
   ExternalLink,
   Plus,
-  Palette,
-  Mail,
   Sparkles,
-  LayoutGrid,
 } from "lucide-react"
 
 import { NewGuest, type DietaryInfo } from "@/lib/types"
 import { cn, getDepartmentColors } from "@/lib/utils"
-import { ThemeColors, resolveThemeColors } from "@/lib/theme-presets"
+import { resolveThemeColors } from "@/lib/theme-presets"
 import {
   getGuestLabel,
   getGuestLabelPlural,
-  getTableLabel,
   getTableLabelPlural,
   getDepartmentLabel,
-  getDepartmentLabelPlural,
   getCountLabel,
 } from "@/lib/terminology"
 
@@ -90,15 +84,12 @@ function adjustBrightness(hex: string, factor: number): string {
 import { GuestForm } from "@/components/guest-form"
 import { BulkEntry } from "@/components/bulk-entry"
 import { CsvUpload } from "@/components/csv-upload"
-import { ThemeCustomizer } from "@/components/theme-customizer"
-import { TerminologyCustomizer } from "@/components/terminology-customizer"
 import { DietaryBadges } from "@/components/dietary-badge"
 import { SeatherderLoading } from "@/components/seatherder-loading"
-import { type EventTypeSettings } from "@/lib/event-types"
+import { EventSettingsBar } from "@/components/event-settings-bar"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -111,14 +102,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet"
 import { TooltipProvider } from "@/components/ui/tooltip"
 
 interface PageProps {
@@ -132,18 +115,17 @@ export default function EventPage({ params }: PageProps) {
   // Header state
   const [isEditingName, setIsEditingName] = React.useState(false)
   const [eventName, setEventName] = React.useState("")
-  const [tableSize, setTableSize] = React.useState(8)
-  const [numberOfRounds, setNumberOfRounds] = React.useState(1)
-  const [roundDuration, setRoundDuration] = React.useState<number>(30)
 
-  // Dialog/Sheet state
+  // Dialog state
   const [showResetDialog, setShowResetDialog] = React.useState(false)
   const [showAddGuestsDialog, setShowAddGuestsDialog] = React.useState(false)
-  const [showSettingsSheet, setShowSettingsSheet] = React.useState(false)
   const [editingGuest, setEditingGuest] = React.useState<Doc<"guests"> | null>(null)
 
   // Hover state for themed buttons
   const [hoveredButton, setHoveredButton] = React.useState<string | null>(null)
+
+  // Sample data state
+  const [isAddingSampleGuests, setIsAddingSampleGuests] = React.useState(false)
 
   // Load params on mount
   React.useEffect(() => {
@@ -167,31 +149,30 @@ export default function EventPage({ params }: PageProps) {
     api.matchingConfig.getByEvent,
     eventId ? { eventId } : "skip"
   )
+  const lockStatus = useQuery(
+    api.events.getEditLockStatus,
+    eventId ? { eventId } : "skip"
+  )
 
   // Convex mutations
   const updateEventName = useMutation(api.events.updateName)
   const updateEventTableSize = useMutation(api.events.updateTableSize)
-  const updateRoundSettings = useMutation(api.events.updateRoundSettings)
   const updateNumberOfRoundsMutation = useMutation(api.events.updateNumberOfRounds)
-  const updateThemePreset = useMutation(api.events.updateThemePreset)
-  const updateCustomColors = useMutation(api.events.updateCustomColors)
-  const updateEventTypeSettings = useMutation(api.events.updateEventTypeSettings)
-  const clearEventTypeSettings = useMutation(api.events.clearEventTypeSettings)
+  const updateRoundDurationMutation = useMutation(api.events.updateRoundDuration)
   const addGuest = useMutation(api.guests.create)
   const addGuests = useMutation(api.guests.createMany)
+  const addSampleGuestsMutation = useMutation(api.guests.addSampleGuests)
+  const removeSampleGuestsMutation = useMutation(api.guests.removeSampleGuests)
   const removeGuest = useMutation(api.guests.remove)
   const removeAllGuests = useMutation(api.guests.removeAllFromEvent)
   const updateGuest = useMutation(api.guests.update)
   const assignTablesMutation = useMutation(api.events.assignTables)
   const resetAssignmentsMutation = useMutation(api.events.resetAssignments)
 
-  // Sync event data with state when loaded
+  // Sync event name with state when loaded
   React.useEffect(() => {
     if (event) {
       setEventName(event.name)
-      setTableSize(event.tableSize)
-      setNumberOfRounds(event.numberOfRounds || 1)
-      setRoundDuration(event.roundDuration || 30)
     }
   }, [event])
 
@@ -315,6 +296,33 @@ export default function EventPage({ params }: PageProps) {
     }
   }, [eventId, removeAllGuests])
 
+  // Add sample guests for demo
+  const handleAddSampleGuests = React.useCallback(async () => {
+    if (!eventId) return
+
+    setIsAddingSampleGuests(true)
+    try {
+      const result = await addSampleGuestsMutation({ eventId, count: 24 })
+      toast.success(`I added ${result.added} demo guests. Feel free to experiment.`)
+    } catch {
+      toast.error("I could not add the demo guests.")
+    } finally {
+      setIsAddingSampleGuests(false)
+    }
+  }, [eventId, addSampleGuestsMutation])
+
+  // Clear sample/demo guests
+  const handleClearSampleGuests = React.useCallback(async () => {
+    if (!eventId) return
+
+    try {
+      const result = await removeSampleGuestsMutation({ eventId })
+      toast.success(`Removed ${result.removed} demo guests.`)
+    } catch {
+      toast.error("I could not remove the demo guests.")
+    }
+  }, [eventId, removeSampleGuestsMutation])
+
   // Update event name
   const handleUpdateName = React.useCallback(async () => {
     if (!eventId || !eventName.trim()) return
@@ -327,123 +335,6 @@ export default function EventPage({ params }: PageProps) {
       toast.error("I could not change the name.")
     }
   }, [eventId, eventName, updateEventName])
-
-  // Update table size
-  const handleUpdateTableSize = React.useCallback(
-    async (newSize: number) => {
-      if (!eventId) return
-
-      const validSize = Math.max(1, Math.min(50, newSize))
-      setTableSize(validSize)
-
-      try {
-        await updateEventTableSize({ id: eventId, tableSize: validSize })
-      } catch {
-        toast.error("I could not change the table size.")
-      }
-    },
-    [eventId, updateEventTableSize]
-  )
-
-  // Update number of rounds
-  // Store isAssigned in a variable to satisfy React Compiler
-  const isAssigned = event?.isAssigned
-  const handleUpdateNumberOfRounds = React.useCallback(
-    async (newRounds: number) => {
-      if (!eventId) return
-
-      const validRounds = Math.max(1, Math.min(10, newRounds))
-      setNumberOfRounds(validRounds)
-
-      try {
-        if (isAssigned) {
-          // Use the special mutation that handles regenerating assignments
-          const result = await updateNumberOfRoundsMutation({ id: eventId, numberOfRounds: validRounds })
-          if (result.regenerated) {
-            toast.success(`I added ${result.newRoundsAdded} new round${result.newRoundsAdded !== 1 ? 's' : ''} with seating.`)
-          }
-        } else {
-          await updateRoundSettings({ id: eventId, numberOfRounds: validRounds })
-        }
-      } catch {
-        toast.error("I could not update the rounds.")
-      }
-    },
-    [eventId, isAssigned, updateRoundSettings, updateNumberOfRoundsMutation]
-  )
-
-  // Update round duration
-  const handleUpdateRoundDuration = React.useCallback(
-    async (newDuration: number) => {
-      if (!eventId) return
-
-      const validDuration = Math.max(1, Math.min(180, newDuration))
-      setRoundDuration(validDuration)
-
-      try {
-        await updateRoundSettings({ id: eventId, roundDuration: validDuration })
-      } catch {
-        toast.error("I could not update the duration.")
-      }
-    },
-    [eventId, updateRoundSettings]
-  )
-
-  // Theme handlers
-  const handleThemePresetChange = React.useCallback(
-    async (preset: string | undefined) => {
-      if (!eventId) return
-
-      try {
-        await updateThemePreset({ id: eventId, themePreset: preset })
-      } catch {
-        toast.error("I could not update the theme.")
-      }
-    },
-    [eventId, updateThemePreset]
-  )
-
-  const handleCustomColorsChange = React.useCallback(
-    async (colors: ThemeColors | undefined) => {
-      if (!eventId) return
-
-      try {
-        await updateCustomColors({ id: eventId, customColors: colors })
-      } catch {
-        toast.error("I could not update the colors.")
-      }
-    },
-    [eventId, updateCustomColors]
-  )
-
-  // Terminology handlers
-  const handleTerminologyChange = React.useCallback(
-    async (settings: EventTypeSettings) => {
-      if (!eventId) return
-
-      try {
-        await updateEventTypeSettings({ id: eventId, eventTypeSettings: settings })
-        toast.success("I will use the new terminology.")
-      } catch {
-        toast.error("I could not update the terminology.")
-      }
-    },
-    [eventId, updateEventTypeSettings]
-  )
-
-  const handleClearTerminology = React.useCallback(
-    async () => {
-      if (!eventId) return
-
-      try {
-        await clearEventTypeSettings({ id: eventId })
-        toast.success("Reset to defaults.")
-      } catch {
-        toast.error("I could not reset the terminology.")
-      }
-    },
-    [eventId, clearEventTypeSettings]
-  )
 
   // Assign tables
   const handleAssignTables = React.useCallback(async () => {
@@ -493,6 +384,17 @@ export default function EventPage({ params }: PageProps) {
       guests.map((g) => g.department).filter((d): d is string => !!d)
     )
     return Array.from(depts).sort()
+  }, [guests])
+
+  // Check if there are demo guests
+  const hasDemoGuests = React.useMemo(() => {
+    if (!guests) return false
+    return guests.some(g => g.attributes?.customTags?.includes('demo'))
+  }, [guests])
+
+  const demoGuestCount = React.useMemo(() => {
+    if (!guests) return 0
+    return guests.filter(g => g.attributes?.customTags?.includes('demo')).length
   }, [guests])
 
   // Resolve theme colors
@@ -590,6 +492,12 @@ export default function EventPage({ params }: PageProps) {
         color: pageTextColor,
         backgroundColor: `${pageTextColor}15`,
       },
+      // Badge outline on page background
+      badgeOutline: {
+        borderColor: `${pageTextColor}50`,
+        color: pageTextColor,
+        backgroundColor: 'transparent',
+      },
     }
   }, [themeColors])
 
@@ -611,8 +519,7 @@ export default function EventPage({ params }: PageProps) {
               This event does not exist, or it wandered off. I am not sure which.
             </p>
             <Button onClick={() => router.push("/admin")} className="w-full">
-              <ArrowLeft className="mr-2 size-4" />
-              Back to Admin
+              Back to Dashboard
             </Button>
           </CardContent>
         </Card>
@@ -629,131 +536,6 @@ export default function EventPage({ params }: PageProps) {
         <div className="container mx-auto p-4 md:p-6 lg:p-8 max-w-4xl">
           {/* Header Section */}
           <div className="space-y-4 mb-6">
-            {/* Top Bar */}
-            <div className="flex items-center justify-between gap-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => router.push("/admin")}
-                className="gap-2 transition-colors"
-                style={themedStyles
-                  ? hoveredButton === 'back'
-                    ? themedStyles.ghostHover
-                    : themedStyles.ghost
-                  : undefined
-                }
-                onMouseEnter={() => setHoveredButton('back')}
-                onMouseLeave={() => setHoveredButton(null)}
-              >
-                <ArrowLeft className="size-4" />
-                Back
-              </Button>
-
-              <div className="flex items-center gap-2">
-                {/* Emails Page Link */}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-2 transition-colors"
-                  onClick={() => router.push(`/event/${eventId}/emails`)}
-                  style={themedStyles
-                    ? hoveredButton === 'emails'
-                      ? { ...themedStyles.pageInput, backgroundColor: `${themedStyles.pageText.color}20` }
-                      : themedStyles.pageInput
-                    : undefined
-                  }
-                  onMouseEnter={() => setHoveredButton('emails')}
-                  onMouseLeave={() => setHoveredButton(null)}
-                >
-                  <Mail className="size-4" />
-                  Emails
-                </Button>
-
-                {/* Seating Configuration Link */}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-2 transition-colors"
-                  onClick={() => router.push(`/event/${eventId}/seating`)}
-                  style={themedStyles
-                    ? hoveredButton === 'matching'
-                      ? { ...themedStyles.pageInput, backgroundColor: `${themedStyles.pageText.color}20` }
-                      : themedStyles.pageInput
-                    : undefined
-                  }
-                  onMouseEnter={() => setHoveredButton('matching')}
-                  onMouseLeave={() => setHoveredButton(null)}
-                >
-                  <Sparkles className="size-4" />
-                  How to Seat
-                </Button>
-
-                {/* Seating Editor Link */}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-2 transition-colors"
-                  onClick={() => router.push(`/event/${eventId}/seating-editor`)}
-                  style={themedStyles
-                    ? hoveredButton === 'seating'
-                      ? { ...themedStyles.pageInput, backgroundColor: `${themedStyles.pageText.color}20` }
-                      : themedStyles.pageInput
-                    : undefined
-                  }
-                  onMouseEnter={() => setHoveredButton('seating')}
-                  onMouseLeave={() => setHoveredButton(null)}
-                >
-                  <LayoutGrid className="size-4" />
-                  Seating
-                </Button>
-
-                {/* Settings Sheet Trigger */}
-                <Sheet open={showSettingsSheet} onOpenChange={setShowSettingsSheet}>
-                  <SheetTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="gap-2 transition-colors"
-                      style={themedStyles
-                        ? hoveredButton === 'lookFeel'
-                          ? { ...themedStyles.pageInput, backgroundColor: `${themedStyles.pageText.color}20` }
-                          : themedStyles.pageInput
-                        : undefined
-                      }
-                      onMouseEnter={() => setHoveredButton('lookFeel')}
-                      onMouseLeave={() => setHoveredButton(null)}
-                    >
-                      <Palette className="size-4" />
-                      Look & Feel
-                    </Button>
-                  </SheetTrigger>
-                  <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
-                    <SheetHeader>
-                      <SheetTitle>Look & Feel</SheetTitle>
-                      <SheetDescription>
-                        I can wear different colors and speak your language.
-                      </SheetDescription>
-                    </SheetHeader>
-                    <div className="mt-6 space-y-8">
-                      <ThemeCustomizer
-                        themePreset={event.themePreset}
-                        customColors={event.customColors}
-                        onThemePresetChange={handleThemePresetChange}
-                        onCustomColorsChange={handleCustomColorsChange}
-                      />
-                      <Separator />
-                      <TerminologyCustomizer
-                        eventType={event.eventType}
-                        eventTypeSettings={event.eventTypeSettings}
-                        onSettingsChange={handleTerminologyChange}
-                        onClearSettings={handleClearTerminology}
-                      />
-                    </div>
-                  </SheetContent>
-                </Sheet>
-              </div>
-            </div>
-
             {/* Event Name */}
             <div className="space-y-1">
               {isEditingName ? (
@@ -813,50 +595,35 @@ export default function EventPage({ params }: PageProps) {
               )}
             </div>
 
-            {/* Event Settings - Compact inline */}
-            <div className="flex flex-wrap items-center gap-4 text-sm">
-              <div className="flex items-center gap-2">
-                <Label style={themedStyles?.pageTextMuted}>Per table:</Label>
-                <Input
-                  type="number"
-                  min={1}
-                  max={50}
-                  value={tableSize}
-                  onChange={(e) => handleUpdateTableSize(parseInt(e.target.value) || 1)}
-                  className="w-16 h-8"
-                  style={themedStyles?.pageInput}
-                  disabled={event.isAssigned}
-                />
-                {event.isAssigned && (
-                  <span className="text-xs" style={themedStyles?.pageTextMuted}>(locked)</span>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                <Label style={themedStyles?.pageTextMuted}>Rounds:</Label>
-                <Input
-                  type="number"
-                  min={1}
-                  max={10}
-                  value={numberOfRounds}
-                  onChange={(e) => handleUpdateNumberOfRounds(parseInt(e.target.value) || 1)}
-                  className="w-16 h-8"
-                  style={themedStyles?.pageInput}
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <Label style={themedStyles?.pageTextMuted}>Duration:</Label>
-                <Input
-                  type="number"
-                  min={1}
-                  max={180}
-                  value={roundDuration}
-                  onChange={(e) => handleUpdateRoundDuration(parseInt(e.target.value) || 30)}
-                  className="w-16 h-8"
-                  style={themedStyles?.pageInput}
-                />
-                <span style={themedStyles?.pageTextMuted}>min</span>
-              </div>
-            </div>
+            {/* Event Settings - Inline editable */}
+            <EventSettingsBar
+              tableSize={event.tableSize}
+              numberOfRounds={event.numberOfRounds ?? 1}
+              roundDuration={event.roundDuration ?? 30}
+              isAssigned={event.isAssigned ?? false}
+              lockStatus={lockStatus ?? { isLocked: true, lockReason: "none", checkedInCount: 0 }}
+              guestCount={guests?.length ?? 0}
+              themedStyles={themedStyles}
+              onViewCheckIns={() => router.push(`/event/${eventId}/live`)}
+              onTableSizeChange={async (size) => {
+                await updateEventTableSize({ id: eventId!, tableSize: size })
+                if (event.isAssigned) {
+                  await assignTablesMutation({ id: eventId! })
+                  toast.success("Table size changed. Everyone has been reassigned.")
+                }
+              }}
+              onRoundsChange={async (rounds) => {
+                const result = await updateNumberOfRoundsMutation({ id: eventId!, numberOfRounds: rounds })
+                if (result.regenerated) {
+                  toast.success(`I added ${result.newRoundsAdded} new round${result.newRoundsAdded !== 1 ? "s" : ""} with seating.`)
+                } else {
+                  toast.success("Rounds updated.")
+                }
+              }}
+              onDurationChange={async (duration) => {
+                await updateRoundDurationMutation({ id: eventId!, roundDuration: duration })
+              }}
+            />
 
             {/* Go to Live View button - shown when tables are assigned */}
             {event.isAssigned && (
@@ -905,6 +672,16 @@ export default function EventPage({ params }: PageProps) {
                         )}
                       </CardTitle>
                       <div className="flex items-center gap-2">
+                        {hasDemoGuests && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleClearSampleGuests}
+                            className="text-muted-foreground hover:text-foreground"
+                          >
+                            Clear Demo ({demoGuestCount})
+                          </Button>
+                        )}
                         {guests && guests.length > 0 && (
                           <Button
                             variant="ghost"
@@ -940,21 +717,44 @@ export default function EventPage({ params }: PageProps) {
                         <Users className="size-12 mx-auto mb-3 opacity-20" />
                         <p className="font-medium mb-1" style={themedStyles?.cardText}>No {getGuestLabelPlural(event).toLowerCase()} yet. I am waiting.</p>
                         <p className="text-sm mb-4">Give me names.</p>
-                        <Button
-                          onClick={() => setShowAddGuestsDialog(true)}
-                          className="gap-2 transition-colors"
-                          style={themedStyles
-                            ? hoveredButton === 'addGuests2'
-                              ? themedStyles.primaryHover
-                              : themedStyles.primary
-                            : undefined
-                          }
-                          onMouseEnter={() => setHoveredButton('addGuests2')}
-                          onMouseLeave={() => setHoveredButton(null)}
-                        >
-                          <Plus className="size-4" />
-                          Add {getGuestLabelPlural(event)}
-                        </Button>
+                        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                          <Button
+                            onClick={() => setShowAddGuestsDialog(true)}
+                            className="gap-2 transition-colors"
+                            style={themedStyles
+                              ? hoveredButton === 'addGuests2'
+                                ? themedStyles.primaryHover
+                                : themedStyles.primary
+                              : undefined
+                            }
+                            onMouseEnter={() => setHoveredButton('addGuests2')}
+                            onMouseLeave={() => setHoveredButton(null)}
+                          >
+                            <Plus className="size-4" />
+                            Add {getGuestLabelPlural(event)}
+                          </Button>
+                          <span className="text-sm" style={themedStyles?.cardTextMuted}>or</span>
+                          <Button
+                            variant="outline"
+                            onClick={handleAddSampleGuests}
+                            disabled={isAddingSampleGuests}
+                            className="gap-2 transition-colors"
+                            style={themedStyles
+                              ? hoveredButton === 'sampleGuests'
+                                ? themedStyles.outlineOnCardHover
+                                : themedStyles.outlineOnCard
+                              : undefined
+                            }
+                            onMouseEnter={() => setHoveredButton('sampleGuests')}
+                            onMouseLeave={() => setHoveredButton(null)}
+                          >
+                            <Sparkles className="size-4" />
+                            {isAddingSampleGuests ? "Adding..." : "Try with demo guests"}
+                          </Button>
+                        </div>
+                        <p className="text-xs mt-4" style={themedStyles?.cardTextMuted}>
+                          Demo guests let you explore the app. You can clear them later.
+                        </p>
                       </div>
                     ) : (
                       <div className="space-y-4">
@@ -1115,13 +915,13 @@ export default function EventPage({ params }: PageProps) {
                       {getCountLabel(event, guests?.length || 0, "guest")}
                     </Badge>
                     <Badge variant="secondary" className="text-base" style={themedStyles?.primary}>
-                      {getCountLabel(event, Math.ceil((guests?.length || 0) / tableSize), "table")}
+                      {getCountLabel(event, Math.ceil((guests?.length || 0) / event.tableSize), "table")}
                     </Badge>
                     <Badge variant="secondary" className="text-base" style={themedStyles?.primary}>
-                      {numberOfRounds} round{numberOfRounds !== 1 ? "s" : ""}
+                      {event.numberOfRounds ?? 1} round{(event.numberOfRounds ?? 1) !== 1 ? "s" : ""}
                     </Badge>
                     <Badge variant="secondary" className="text-base" style={themedStyles?.primary}>
-                      {roundDuration} min/round
+                      {event.roundDuration ?? 30} min/round
                     </Badge>
                   </div>
 

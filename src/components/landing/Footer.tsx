@@ -2,6 +2,13 @@
 
 import { motion } from "framer-motion";
 import { Heart } from "lucide-react";
+import Link from "next/link";
+
+const footerLinks = [
+  { href: "/privacy", label: "Privacy" },
+  { href: "/terms", label: "Terms" },
+  { href: "mailto:hello@seatherder.com", label: "Contact" },
+];
 
 export const Footer = () => {
   return (
@@ -14,7 +21,7 @@ export const Footer = () => {
           >
             <span className="text-3xl">🐕</span>
             <div>
-              <span className="font-display text-lg font-bold bg-gradient-to-r from-primary to-pink-500 bg-clip-text text-transparent">
+              <span className="font-display text-lg font-bold bg-linear-to-r from-primary to-pink-500 bg-clip-text text-transparent">
                 Seatherder
               </span>
               <p className="text-sm text-muted-foreground">
@@ -24,25 +31,37 @@ export const Footer = () => {
           </motion.div>
 
           <div className="flex items-center gap-6 text-sm font-medium text-muted-foreground">
-            {["Privacy", "Terms", "Contact"].map((link, i) => (
-              <motion.a
-                key={link}
-                href="#"
-                className="hover:text-primary transition-colors"
+            {footerLinks.map((link, i) => (
+              <motion.div
+                key={link.label}
                 whileHover={{ y: -2, scale: 1.05 }}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.1 }}
               >
-                {link}
-              </motion.a>
+                {link.href.startsWith("mailto:") ? (
+                  <a
+                    href={link.href}
+                    className="hover:text-primary transition-colors"
+                  >
+                    {link.label}
+                  </a>
+                ) : (
+                  <Link
+                    href={link.href}
+                    className="hover:text-primary transition-colors"
+                  >
+                    {link.label}
+                  </Link>
+                )}
+              </motion.div>
             ))}
           </div>
 
           <p className="text-sm text-muted-foreground flex items-center gap-2">
             Made with
             <Heart className="w-4 h-4 text-primary" />
-            and 🦴 © 2026
+            and 🦴 © 2025
           </p>
         </div>
 

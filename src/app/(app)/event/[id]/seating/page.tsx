@@ -5,14 +5,20 @@ import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { Id } from "@convex/_generated/dataModel";
-import { ArrowLeft, Check, Sparkles } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, Settings2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SeatingTypeSelector } from "@/components/seating-type-selector";
 import { SeatingQuestionFlow } from "@/components/seating-question-flow";
 import { SeatingConfirmation } from "@/components/seating-confirmation";
 import { SeatherderLoading } from "@/components/seatherder-loading";
+import { MatchingConfig } from "@/components/matching-config";
 import {
   SEATING_EVENT_TYPES,
   QUESTIONS_BY_TYPE,
@@ -35,6 +41,7 @@ export default function SeatingWizardPage({ params }: PageProps) {
   );
   const [answers, setAnswers] = React.useState<Record<string, string>>({});
   const [saving, setSaving] = React.useState(false);
+  const [advancedOpen, setAdvancedOpen] = React.useState(false);
 
   // Load params on mount
   React.useEffect(() => {
@@ -113,6 +120,13 @@ export default function SeatingWizardPage({ params }: PageProps) {
     }
   };
 
+  // Calculate preview weights from wizard answers (memoized to prevent re-renders)
+  // Must be before early returns to satisfy React hooks rules
+  const wizardWeights = React.useMemo(() => {
+    if (!seatingType) return undefined;
+    return mapAnswersToConfig(seatingType, answers).weights;
+  }, [seatingType, answers]);
+
   // Loading state
   if (!eventId || event === undefined) {
     return <SeatherderLoading message="I am loading the seating options..." />;
@@ -131,8 +145,7 @@ export default function SeatingWizardPage({ params }: PageProps) {
               This event does not exist, or it wandered off. I am not sure which.
             </p>
             <Button onClick={() => router.push("/admin")} className="w-full">
-              <ArrowLeft className="mr-2 size-4" />
-              Back to Admin
+              Back to Dashboard
             </Button>
           </CardContent>
         </Card>
@@ -148,28 +161,16 @@ export default function SeatingWizardPage({ params }: PageProps) {
     : false;
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="bg-background">
       <div className="container mx-auto p-4 md:p-6 lg:p-8 max-w-2xl">
         {/* Header */}
-        <div className="space-y-4 mb-6">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => router.push(`/event/${eventId}`)}
-            className="gap-2"
-          >
-            <ArrowLeft className="size-4" />
-            Back to {event.name}
-          </Button>
-
-          <div className="space-y-1">
-            <h1 className="text-2xl md:text-3xl font-bold">
-              How should I seat your guests?
-            </h1>
-            <p className="text-muted-foreground">
-              Tell me about your event. I will figure out the rest.
-            </p>
-          </div>
+        <div className="space-y-1 mb-6">
+          <h1 className="text-2xl md:text-3xl font-bold">
+            How should I seat your guests?
+          </h1>
+          <p className="text-muted-foreground">
+            Tell me about your event. I will figure out the rest.
+          </p>
         </div>
 
         {/* Wizard Content */}
@@ -212,6 +213,41 @@ export default function SeatingWizardPage({ params }: PageProps) {
               onBack={handleBack}
               saving={saving}
             />
+          )}
+
+          {/* Advanced Settings - available after selecting a type */}
+          {eventId && seatingType && (step === "questions" || step === "confirm") && (
+            <Collapsible
+              open={advancedOpen}
+              onOpenChange={setAdvancedOpen}
+              className="mt-8 pt-6 border-t"
+            >
+              <CollapsibleTrigger asChild>
+                <Button
+                  variant="ghost"
+                  className="w-full justify-between text-muted-foreground hover:text-foreground"
+                >
+                  <span className="flex items-center gap-2">
+                    <Settings2 className="h-4 w-4" />
+                    Advanced Settings
+                  </span>
+                  <ChevronDown
+                    className={`h-4 w-4 transition-transform ${
+                      advancedOpen ? "rotate-180" : ""
+                    }`}
+                  />
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="pt-4">
+                <p className="text-sm text-muted-foreground mb-4">
+                  These are the weights calculated from your answers above. Adjust them if you want finer control.
+                </p>
+                <MatchingConfig
+                  eventId={eventId}
+                  initialWeights={wizardWeights}
+                />
+              </CollapsibleContent>
+            </Collapsible>
           )}
         </div>
 

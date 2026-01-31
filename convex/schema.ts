@@ -3,6 +3,8 @@ import { v } from "convex/values"
 
 export default defineSchema({
   events: defineTable({
+    // Owner (Clerk user ID)
+    userId: v.optional(v.string()),  // Optional during migration, will become required
     name: v.string(),
     tableSize: v.number(),
     createdAt: v.string(),
@@ -42,7 +44,11 @@ export default defineSchema({
       departmentLabelPlural: v.string(), // "Departments", "Companies", "Interests", etc.
       showRoundTimer: v.boolean(),       // Whether to show timer during rounds
     })),
-  }),
+    // Guest self-service settings
+    selfServiceDeadline: v.optional(v.string()),         // ISO datetime - after this, guests can't edit
+    selfServiceNotificationsEnabled: v.optional(v.boolean()), // Notify organizer of guest changes
+  })
+    .index("by_user", ["userId"]),
 
   guests: defineTable({
     eventId: v.id("events"),
@@ -76,10 +82,17 @@ export default defineSchema({
     invitationSentAt: v.optional(v.string()),     // ISO timestamp
     confirmationSentAt: v.optional(v.string()),   // ISO timestamp
     emailUnsubscribed: v.optional(v.boolean()),   // Opt-out flag
+    // Guest self-service portal
+    selfServiceToken: v.optional(v.string()),     // Unique URL-safe token for guest access
+    rsvpStatus: v.optional(v.string()),           // "confirmed" | "declined" | "pending"
+    lastSelfServiceUpdate: v.optional(v.string()), // ISO timestamp of last update via self-service
+    // Event day status
+    status: v.optional(v.string()),               // "present" | "no-show" | "late" - null means none set
   })
     .index("by_event", ["eventId"])
     .index("by_qrCodeId", ["qrCodeId"])
-    .index("by_name", ["name"]),
+    .index("by_name", ["name"])
+    .index("by_selfServiceToken", ["selfServiceToken"]),
 
   tables: defineTable({
     eventId: v.id("events"),
@@ -147,6 +160,8 @@ export default defineSchema({
       goalCompatibility: v.number(),    // Match complementary goals (default: 0.4)
       repeatAvoidance: v.number(),      // Avoid sitting with same people (default: 0.9)
     }),
+    // Cross-event novelty preference: 0-1 where 0 = ignore history, 1 = strongly prefer new connections
+    noveltyPreference: v.optional(v.number()),  // Default: 0.5
     // Optional: custom interest categories for this event
     interestOptions: v.optional(v.array(v.string())),
     // Optional: custom goal options for this event
@@ -206,4 +221,61 @@ export default defineSchema({
     isProcessing: v.boolean(),
     lastProcessedAt: v.optional(v.number()),
   }),
+
+  // =============================================================================
+  // Breakout Rooms & Sessions
+  // =============================================================================
+
+  // Physical rooms for breakout sessions
+  rooms: defineTable({
+    eventId: v.id("events"),
+    name: v.string(),                         // "Main Hall", "Room A", etc.
+    capacity: v.optional(v.number()),         // Max people this room can hold
+    location: v.optional(v.string()),         // "Building 2, Floor 3"
+    description: v.optional(v.string()),      // Additional details
+  })
+    .index("by_event", ["eventId"]),
+
+  // Sessions/workshops within an event
+  sessions: defineTable({
+    eventId: v.id("events"),
+    name: v.string(),                         // "Opening Keynote", "Workshop A"
+    description: v.optional(v.string()),      // What the session is about
+    startTime: v.optional(v.string()),        // ISO datetime
+    endTime: v.optional(v.string()),          // ISO datetime
+    roomId: v.optional(v.id("rooms")),        // Which room this session is in
+    hasTableSeating: v.optional(v.boolean()), // Whether to use table assignments
+    maxCapacity: v.optional(v.number()),      // Optional capacity limit
+  })
+    .index("by_event", ["eventId"])
+    .index("by_room", ["roomId"]),
+
+  // Junction table for guest-session assignments
+  sessionAssignments: defineTable({
+    sessionId: v.id("sessions"),
+    guestId: v.id("guests"),
+    eventId: v.id("events"),                  // Denormalized for efficient queries
+    createdAt: v.string(),                    // ISO timestamp
+  })
+    .index("by_session", ["sessionId"])
+    .index("by_guest", ["guestId"])
+    .index("by_event", ["eventId"]),
+
+  // =============================================================================
+  // Seating History (Cross-Event Memory)
+  // =============================================================================
+
+  // Track who sat together across events for the algorithm's "novelty" preference
+  // Uses email as identifier so history persists even if guests are re-imported
+  seatingHistory: defineTable({
+    organizerId: v.string(),                  // Clerk user ID of the organizer
+    guestEmail: v.string(),                   // Email of guest A (normalized lowercase)
+    partnerEmail: v.string(),                 // Email of guest B (normalized lowercase)
+    eventId: v.id("events"),                  // Which event this occurred at
+    roundNumber: v.number(),                  // Which round they sat together
+    timestamp: v.string(),                    // ISO timestamp when recorded
+  })
+    .index("by_organizer_guest", ["organizerId", "guestEmail"])
+    .index("by_organizer_pair", ["organizerId", "guestEmail", "partnerEmail"])
+    .index("by_event", ["eventId"]),
 })

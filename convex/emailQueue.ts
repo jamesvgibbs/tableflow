@@ -1,7 +1,6 @@
 import { v } from "convex/values"
 import { mutation, internalMutation, internalQuery, internalAction } from "./_generated/server"
 import { internal } from "./_generated/api"
-import type { Id } from "./_generated/dataModel"
 
 // Priority levels (lower = higher priority)
 export const EMAIL_PRIORITY = {
@@ -225,6 +224,7 @@ export const processNextEmail = internalAction({
       } else if (email.type === "checkin_confirmation") {
         result = await ctx.runAction(internal.email.sendCheckInConfirmationDirect, {
           guestId: email.guestId,
+          baseUrl: email.templateData.baseUrl,
         })
       } else {
         throw new Error(`Unknown email type: ${email.type}`)
@@ -254,6 +254,50 @@ export const processNextEmail = internalAction({
       internal.emailQueue.processNextEmail,
       {}
     )
+  },
+})
+
+/**
+ * Reset pending emails and restart the processor
+ * Use this when the queue is stuck
+ */
+export const resetQueue = mutation({
+  args: { eventId: v.optional(v.id("events")) },
+  handler: async (ctx, args) => {
+    const now = Date.now()
+
+    // Get emails to reset
+    const eventId = args.eventId
+    const query = eventId
+      ? ctx.db.query("emailQueue").withIndex("by_event", (q) => q.eq("eventId", eventId))
+      : ctx.db.query("emailQueue")
+
+    const emails = await query.collect()
+
+    // Reset all non-sent emails
+    let resetCount = 0
+    for (const email of emails) {
+      if (email.status !== "sent") {
+        await ctx.db.patch(email._id, {
+          status: QUEUE_STATUS.PENDING,
+          attempts: 0,
+          nextAttemptAt: now,
+          errorMessage: undefined,
+        })
+        resetCount++
+      }
+    }
+
+    // Reset processor state
+    const status = await ctx.db.query("emailQueueStatus").first()
+    if (status) {
+      await ctx.db.patch(status._id, { isProcessing: false })
+    }
+
+    // Restart the processor
+    await ctx.scheduler.runAfter(0, internal.emailQueue.maybeStartProcessor, {})
+
+    return { resetCount, message: "Queue reset and processor restarted" }
   },
 })
 

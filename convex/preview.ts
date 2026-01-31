@@ -1,11 +1,43 @@
 import { v } from "convex/values"
-import { mutation, query } from "./_generated/server"
+import { mutation, query, QueryCtx, MutationCtx } from "./_generated/server"
 import { Id } from "./_generated/dataModel"
 import {
   calculateGuestCompatibility,
+  calculateDepartmentConcentrationPenalty,
   DEFAULT_WEIGHTS,
   type MatchingWeights,
 } from "./matching"
+
+// =============================================================================
+// Authentication Helpers
+// =============================================================================
+
+/**
+ * Get the authenticated user's ID from Clerk.
+ * Returns null if not authenticated.
+ */
+async function getAuthenticatedUserId(ctx: QueryCtx | MutationCtx): Promise<string | null> {
+  const identity = await ctx.auth.getUserIdentity()
+  return identity?.subject ?? null
+}
+
+/**
+ * Verify the current user owns an event.
+ * During migration, events without userId are accessible (backward compatibility).
+ */
+async function verifyEventOwnership(
+  ctx: QueryCtx | MutationCtx,
+  eventId: Id<"events">,
+  userId: string | null
+): Promise<void> {
+  const event = await ctx.db.get(eventId)
+  if (!event) {
+    throw new Error("Event not found")
+  }
+  if (event.userId && event.userId !== userId) {
+    throw new Error("Access denied: you do not own this event")
+  }
+}
 
 /**
  * Generate a unique session ID for preview assignments
@@ -28,7 +60,11 @@ type GuestDoc = {
   department?: string
   eventId: Id<"events">
   attributes?: GuestAttributes
+  email?: string
 }
+
+// Cross-event history data structure
+type CrossEventHistory = Map<string, number> // "email1:email2" -> count of events together
 
 /**
  * Calculate assignment score respecting constraints
@@ -44,7 +80,10 @@ function calculateAssignmentScore(
     pins: Map<string, number>
     repels: Set<string>
     attracts: Set<string>
-  }
+  },
+  guestEmails?: Map<string, string>,
+  crossEventHistory?: CrossEventHistory,
+  noveltyPreference: number = 0.5
 ): number {
   let score = 0
   const guestId = guest._id.toString()
@@ -81,17 +120,19 @@ function calculateAssignmentScore(
 
   // Calculate compatibility with current table guests
   if (currentTableGuests.length > 0) {
-    // Department mixing
-    const hasSameDepartment = currentTableGuests.some(
-      (tg) => tg.department && tg.department === guest.department
+    // Department mixing - use concentration penalty for non-linear scaling
+    // This strongly discourages having many people from same department at one table
+    score += calculateDepartmentConcentrationPenalty(
+      guest.department,
+      currentTableGuests,
+      matchingWeights.departmentMix
     )
-    if (hasSameDepartment) {
-      score += matchingWeights.departmentMix
-    }
 
-    // Interest/attribute matching
+    // Interest/attribute matching (excludes department since we handle it above)
     const compatibilitySum = currentTableGuests.reduce((sum, tableGuest) => {
-      return sum + calculateGuestCompatibility(guest, tableGuest, matchingWeights)
+      // Calculate compatibility without department mixing (already handled)
+      const weightsWithoutDept = { ...matchingWeights, departmentMix: 0 }
+      return sum + calculateGuestCompatibility(guest, tableGuest, weightsWithoutDept)
     }, 0)
     // Invert: higher compatibility = lower score (better)
     score -= (compatibilitySum / currentTableGuests.length) * 2
@@ -105,17 +146,38 @@ function calculateAssignmentScore(
     }
   }
 
+  // Cross-event history penalty - only if noveltyPreference > 0
+  if (crossEventHistory && guestEmails && noveltyPreference > 0) {
+    const guestEmail = guestEmails.get(guestId)
+    if (guestEmail) {
+      for (const tableGuest of currentTableGuests) {
+        const tableGuestEmail = guestEmails.get(tableGuest._id.toString())
+        if (tableGuestEmail) {
+          const [e1, e2] = guestEmail < tableGuestEmail
+            ? [guestEmail, tableGuestEmail]
+            : [tableGuestEmail, guestEmail]
+          const pairKey = `${e1}:${e2}`
+          const pastEvents = crossEventHistory.get(pairKey) || 0
+          score += pastEvents * matchingWeights.repeatAvoidance * noveltyPreference
+        }
+      }
+    }
+  }
+
   return score
 }
 
 /**
- * Generate preview assignments without committing
+ * Generate preview assignments without committing (with ownership check)
  */
 export const generatePreview = mutation({
   args: {
     eventId: v.id("events"),
   },
   handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.eventId, userId)
+
     const event = await ctx.db.get(args.eventId)
     if (!event) throw new Error("Event not found")
 
@@ -138,6 +200,9 @@ export const generatePreview = mutation({
     const matchingWeights: MatchingWeights = matchingConfig?.weights
       ? { ...DEFAULT_WEIGHTS, ...matchingConfig.weights }
       : DEFAULT_WEIGHTS
+
+    // Get novelty preference for cross-event history scoring (0-1, default 0.5)
+    const noveltyPreference = matchingConfig?.noveltyPreference ?? 0.5
 
     // Get constraints
     const constraintDocs = await ctx.db
@@ -170,6 +235,39 @@ export const generatePreview = mutation({
     const numberOfRounds = event.numberOfRounds || 1
     const tableSize = event.tableSize
     const numTables = Math.ceil(guests.length / tableSize)
+
+    // Build guest email lookup for cross-event history
+    const guestEmails = new Map<string, string>()
+    for (const guest of guests) {
+      if (guest.email) {
+        guestEmails.set(guest._id.toString(), guest.email.toLowerCase().trim())
+      }
+    }
+
+    // Query cross-event seating history for novelty scoring
+    const crossEventHistory: CrossEventHistory = new Map()
+    if (userId) {
+      const uniqueEmails = [...new Set(guestEmails.values())]
+      for (const email of uniqueEmails) {
+        const history = await ctx.db
+          .query("seatingHistory")
+          .withIndex("by_organizer_guest", (q) =>
+            q.eq("organizerId", userId).eq("guestEmail", email)
+          )
+          .filter((q) => q.neq(q.field("eventId"), args.eventId))
+          .collect()
+
+        for (const record of history) {
+          const [e1, e2] = email < record.partnerEmail
+            ? [email, record.partnerEmail]
+            : [record.partnerEmail, email]
+          const pairKey = `${e1}:${e2}`
+          if (uniqueEmails.includes(record.partnerEmail)) {
+            crossEventHistory.set(pairKey, (crossEventHistory.get(pairKey) || 0) + 1)
+          }
+        }
+      }
+    }
 
     // Track assignments and history
     const assignments: Array<{
@@ -237,7 +335,10 @@ export const generatePreview = mutation({
             tablemateHistory,
             previousTableNumber,
             matchingWeights,
-            constraints
+            constraints,
+            guestEmails,
+            crossEventHistory,
+            noveltyPreference
           )
 
           if (score < bestScore) {
@@ -256,7 +357,7 @@ export const generatePreview = mutation({
       }
 
       // Update tablemate history
-      for (const [_, tableGuests] of tables) {
+      for (const [, tableGuests] of tables) {
         for (const guest of tableGuests) {
           const guestHistory = tablemateHistory.get(guest._id.toString())!
           for (const mate of tableGuests) {
@@ -372,7 +473,7 @@ function calculateConstraintViolations(
   for (const pair of constraints.attracts) {
     const [guest1, guest2] = pair.split("-")
     let togetherOnce = false
-    for (const [_, guests] of byRoundAndTable) {
+    for (const [, guests] of byRoundAndTable) {
       if (guests.has(guest1) && guests.has(guest2)) {
         togetherOnce = true
         break
@@ -391,13 +492,16 @@ function calculateConstraintViolations(
 }
 
 /**
- * Get preview assignments for an event
+ * Get preview assignments for an event (with ownership check)
  */
 export const getPreview = query({
   args: {
     eventId: v.id("events"),
   },
   handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.eventId, userId)
+
     const previews = await ctx.db
       .query("previewAssignments")
       .withIndex("by_event", (q) => q.eq("eventId", args.eventId))
@@ -437,13 +541,111 @@ export const getPreview = query({
 })
 
 /**
- * Commit preview to actual assignments
+ * Record seating history from preview assignments for cross-event novelty tracking.
+ */
+async function recordSeatingHistoryFromPreviews(
+  ctx: MutationCtx,
+  organizerId: string,
+  eventId: Id<"events">,
+  previews: Array<{
+    guestId: Id<"guests">
+    roundNumber: number
+    tableNumber: number
+  }>
+): Promise<{ recorded: number; skipped: number }> {
+  // Build guest email lookup
+  const guestEmails = new Map<string, string>()
+  for (const preview of previews) {
+    if (!guestEmails.has(preview.guestId)) {
+      const guest = await ctx.db.get(preview.guestId)
+      if (guest?.email) {
+        guestEmails.set(preview.guestId, guest.email.toLowerCase().trim())
+      }
+    }
+  }
+
+  // Group by round and table
+  const tablesByRound = new Map<number, Map<number, string[]>>()
+  for (const preview of previews) {
+    const email = guestEmails.get(preview.guestId)
+    if (!email) continue
+
+    if (!tablesByRound.has(preview.roundNumber)) {
+      tablesByRound.set(preview.roundNumber, new Map())
+    }
+    const tables = tablesByRound.get(preview.roundNumber)!
+    if (!tables.has(preview.tableNumber)) {
+      tables.set(preview.tableNumber, [])
+    }
+    tables.get(preview.tableNumber)!.push(email)
+  }
+
+  let recorded = 0
+  let skipped = 0
+
+  // Record all pairs for each round/table
+  for (const [roundNumber, tables] of tablesByRound) {
+    for (const emailsAtTable of tables.values()) {
+      for (let i = 0; i < emailsAtTable.length; i++) {
+        for (let j = i + 1; j < emailsAtTable.length; j++) {
+          const email1 = emailsAtTable[i]
+          const email2 = emailsAtTable[j]
+
+          // Create canonical pair (alphabetically sorted)
+          const [canonical1, canonical2] = email1 < email2
+            ? [email1, email2]
+            : [email2, email1]
+
+          // Check if this pair already exists
+          const existing = await ctx.db
+            .query("seatingHistory")
+            .withIndex("by_organizer_pair", (q) =>
+              q
+                .eq("organizerId", organizerId)
+                .eq("guestEmail", canonical1)
+                .eq("partnerEmail", canonical2)
+            )
+            .filter((q) =>
+              q.and(
+                q.eq(q.field("eventId"), eventId),
+                q.eq(q.field("roundNumber"), roundNumber)
+              )
+            )
+            .first()
+
+          if (existing) {
+            skipped++
+            continue
+          }
+
+          await ctx.db.insert("seatingHistory", {
+            organizerId,
+            guestEmail: canonical1,
+            partnerEmail: canonical2,
+            eventId,
+            roundNumber,
+            timestamp: new Date().toISOString(),
+          })
+          recorded++
+        }
+      }
+    }
+  }
+
+  return { recorded, skipped }
+}
+
+/**
+ * Commit preview to actual assignments (with ownership check)
  */
 export const commitPreview = mutation({
   args: {
     eventId: v.id("events"),
   },
   handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.eventId, userId)
+
     const event = await ctx.db.get(args.eventId)
     if (!event) throw new Error("Event not found")
 
@@ -490,6 +692,11 @@ export const commitPreview = mutation({
       currentRound: 0,
     })
 
+    // Record seating history for cross-event novelty tracking
+    if (userId) {
+      await recordSeatingHistoryFromPreviews(ctx, userId, args.eventId, previews)
+    }
+
     // Clear preview
     for (const preview of previews) {
       await ctx.db.delete(preview._id)
@@ -500,13 +707,16 @@ export const commitPreview = mutation({
 })
 
 /**
- * Discard preview without committing
+ * Discard preview without committing (with ownership check)
  */
 export const discardPreview = mutation({
   args: {
     eventId: v.id("events"),
   },
   handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.eventId, userId)
+
     const previews = await ctx.db
       .query("previewAssignments")
       .withIndex("by_event", (q) => q.eq("eventId", args.eventId))
@@ -544,7 +754,7 @@ export const cleanupExpiredPreviews = mutation({
 })
 
 /**
- * Update a single preview assignment (for drag-and-drop)
+ * Update a single preview assignment (for drag-and-drop) (with ownership check)
  */
 export const updatePreviewAssignment = mutation({
   args: {
@@ -554,6 +764,9 @@ export const updatePreviewAssignment = mutation({
     newTableNumber: v.number(),
   },
   handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.eventId, userId)
+
     // Find the preview assignment
     const previews = await ctx.db
       .query("previewAssignments")

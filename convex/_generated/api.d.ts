@@ -18,6 +18,9 @@ import type * as http from "../http.js";
 import type * as matching from "../matching.js";
 import type * as matchingConfig from "../matchingConfig.js";
 import type * as preview from "../preview.js";
+import type * as rooms from "../rooms.js";
+import type * as seatingHistory from "../seatingHistory.js";
+import type * as sessions from "../sessions.js";
 import type * as tables from "../tables.js";
 import type * as themes from "../themes.js";
 
@@ -38,6 +41,9 @@ declare const fullApi: ApiFromModules<{
   matching: typeof matching;
   matchingConfig: typeof matchingConfig;
   preview: typeof preview;
+  rooms: typeof rooms;
+  seatingHistory: typeof seatingHistory;
+  sessions: typeof sessions;
   tables: typeof tables;
   themes: typeof themes;
 }>;

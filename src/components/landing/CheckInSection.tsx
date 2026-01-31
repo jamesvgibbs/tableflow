@@ -57,7 +57,11 @@ export const CheckInSection = () => {
               initial={{ opacity: 0, y: 50 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
-              transition={{ duration: 0.6, delay: index * 0.15, type: "spring" }}
+              transition={{
+                duration: 0.6,
+                delay: index * 0.15,
+                type: "spring",
+              }}
             >
               <motion.div
                 whileHover={{ y: -8, rotate: index === 1 ? -1 : 1 }}
@@ -67,7 +71,7 @@ export const CheckInSection = () => {
                 {/* Icon */}
                 <div className="flex items-center gap-3 mb-4">
                   <div
-                    className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${method.color} flex items-center justify-center shadow-soft`}
+                    className={`w-16 h-16 rounded-2xl bg-linear-to-br ${method.color} flex items-center justify-center shadow-soft`}
                   >
                     <method.icon className="w-8 h-8 text-white" />
                   </div>

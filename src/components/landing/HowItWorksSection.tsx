@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Upload, Brain, QrCode, Sparkles, ArrowRight } from "lucide-react";
+import { ArrowRight, Brain, QrCode, Sparkles, Upload } from "lucide-react";
 
 const steps = [
   {
@@ -73,7 +73,7 @@ export const HowItWorksSection = () => {
                 className="absolute -top-6 -left-2 z-10"
               >
                 <div
-                  className={`w-14 h-14 rounded-full bg-gradient-to-br ${step.color} text-white flex items-center justify-center font-display text-2xl font-bold shadow-soft`}
+                  className={`w-14 h-14 rounded-full bg-linear-to-br ${step.color} text-white flex items-center justify-center font-display text-2xl font-bold shadow-soft`}
                 >
                   {index + 1}
                 </div>
@@ -87,7 +87,7 @@ export const HowItWorksSection = () => {
                 {/* Icon with emoji */}
                 <div className="flex items-center gap-3 mb-4">
                   <div
-                    className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${step.color} flex items-center justify-center shadow-soft`}
+                    className={`w-16 h-16 rounded-2xl bg-linear-to-br ${step.color} flex items-center justify-center shadow-soft`}
                   >
                     <step.icon className="w-8 h-8 text-white" />
                   </div>

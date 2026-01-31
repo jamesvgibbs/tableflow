@@ -1,17 +1,98 @@
 import { v } from "convex/values"
-import { mutation, query } from "./_generated/server"
+import { mutation, query, QueryCtx, MutationCtx } from "./_generated/server"
 import { Id } from "./_generated/dataModel"
 import {
   calculateGuestCompatibility,
+  calculateDepartmentConcentrationPenalty,
   DEFAULT_WEIGHTS,
   type MatchingWeights,
 } from "./matching"
 
-// List all events (sorted by createdAt descending)
+// =============================================================================
+// Authentication Helpers
+// =============================================================================
+
+/**
+ * Get the authenticated user's ID from Clerk.
+ * Returns null if not authenticated (for backward compatibility during migration).
+ */
+async function getAuthenticatedUserId(ctx: QueryCtx | MutationCtx): Promise<string | null> {
+  const identity = await ctx.auth.getUserIdentity()
+  return identity?.subject ?? null
+}
+
+
+/**
+ * Verify the current user owns an event.
+ * During migration, events without userId are accessible (backward compatibility).
+ * After migration, this should strictly enforce ownership.
+ */
+async function verifyEventOwnership(
+  ctx: QueryCtx | MutationCtx,
+  eventId: Id<"events">,
+  userId: string | null
+): Promise<void> {
+  const event = await ctx.db.get(eventId)
+  if (!event) {
+    throw new Error("Event not found")
+  }
+  // During migration: allow access if event has no userId (legacy data)
+  // After migration: remove this condition
+  if (event.userId && event.userId !== userId) {
+    throw new Error("Access denied: you do not own this event")
+  }
+}
+
+/**
+ * Validate that an event is not locked for editing.
+ * Settings lock when EITHER:
+ * 1. First guest checks in (any guest has checkedIn === true)
+ * 2. Live timer starts (event has roundStartedAt !== undefined)
+ */
+async function validateEventNotLocked(
+  ctx: MutationCtx,
+  eventId: Id<"events">
+): Promise<void> {
+  const event = await ctx.db.get(eventId)
+  if (!event) {
+    throw new Error("Event not found")
+  }
+
+  // Check if timer has started
+  if (event.roundStartedAt) {
+    throw new Error("I cannot change this now. The event timer has started.")
+  }
+
+  // Check if any guest has checked in
+  const guests = await ctx.db
+    .query("guests")
+    .withIndex("by_event", (q) => q.eq("eventId", eventId))
+    .collect()
+
+  if (guests.some((g) => g.checkedIn)) {
+    throw new Error("I cannot change this now. Guests have already checked in.")
+  }
+}
+
+// List all events for the current user (sorted by createdAt descending)
 export const list = query({
   args: {},
   handler: async (ctx) => {
-    const events = await ctx.db.query("events").collect()
+    const userId = await getAuthenticatedUserId(ctx)
+
+    let events
+    if (userId) {
+      // Authenticated: show only user's events
+      events = await ctx.db
+        .query("events")
+        .withIndex("by_user", (q) => q.eq("userId", userId))
+        .collect()
+    } else {
+      // Not authenticated: during migration, show all events (backward compat)
+      // After migration, return empty array
+      events = await ctx.db.query("events").collect()
+    }
+
     // Sort by createdAt descending
     return events.sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
@@ -19,20 +100,39 @@ export const list = query({
   },
 })
 
-// Get a single event by ID
+// Get a single event by ID (with ownership check)
 export const get = query({
   args: { id: v.id("events") },
   handler: async (ctx, args) => {
-    return await ctx.db.get(args.id)
+    const userId = await getAuthenticatedUserId(ctx)
+    const event = await ctx.db.get(args.id)
+
+    if (!event) return null
+
+    // During migration: allow access if event has no userId
+    // After migration: enforce strict ownership
+    if (event.userId && event.userId !== userId) {
+      return null // Don't reveal event exists
+    }
+
+    return event
   },
 })
 
-// Get event with all guests and tables
+// Get event with all guests and tables (with ownership check)
 export const getWithDetails = query({
   args: { id: v.id("events") },
   handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx)
     const event = await ctx.db.get(args.id)
+
     if (!event) return null
+
+    // During migration: allow access if event has no userId
+    // After migration: enforce strict ownership
+    if (event.userId && event.userId !== userId) {
+      return null // Don't reveal event exists
+    }
 
     const guests = await ctx.db
       .query("guests")
@@ -52,7 +152,7 @@ export const getWithDetails = query({
   },
 })
 
-// Create a new event
+// Create a new event (requires authentication)
 export const create = mutation({
   args: {
     name: v.string(),
@@ -71,7 +171,11 @@ export const create = mutation({
     })),
   },
   handler: async (ctx, args) => {
+    // Get authenticated user (optional during migration)
+    const userId = await getAuthenticatedUserId(ctx)
+
     const eventId = await ctx.db.insert("events", {
+      userId: userId ?? undefined,  // Set owner if authenticated
       name: args.name,
       tableSize: args.tableSize,
       createdAt: new Date().toISOString(),
@@ -85,47 +189,87 @@ export const create = mutation({
   },
 })
 
-// Update event name
+// Update event name (with ownership check)
 export const updateName = mutation({
   args: {
     id: v.id("events"),
     name: v.string(),
   },
   handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.id, userId)
     await ctx.db.patch(args.id, { name: args.name })
   },
 })
 
-// Update table size
+// Update table size (with ownership check and lock validation)
 export const updateTableSize = mutation({
   args: {
     id: v.id("events"),
     tableSize: v.number(),
   },
   handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.id, userId)
+    await validateEventNotLocked(ctx, args.id)
     await ctx.db.patch(args.id, { tableSize: args.tableSize })
   },
 })
 
-// Update round duration (can be changed anytime)
+// Get edit lock status for an event (to check if settings can be modified)
+export const getEditLockStatus = query({
+  args: { eventId: v.id("events") },
+  handler: async (ctx, args) => {
+    const event = await ctx.db.get(args.eventId)
+    if (!event) {
+      return { isLocked: true, lockReason: "not_found" as const, checkedInCount: 0 }
+    }
+
+    const guests = await ctx.db
+      .query("guests")
+      .withIndex("by_event", (q) => q.eq("eventId", args.eventId))
+      .collect()
+
+    const checkedInCount = guests.filter((g) => g.checkedIn).length
+    const hasTimerStarted = event.roundStartedAt !== undefined
+
+    if (checkedInCount > 0) {
+      return { isLocked: true, lockReason: "guest_checked_in" as const, checkedInCount }
+    }
+    if (hasTimerStarted) {
+      return { isLocked: true, lockReason: "timer_started" as const, checkedInCount: 0 }
+    }
+
+    return { isLocked: false, lockReason: "none" as const, checkedInCount: 0 }
+  },
+})
+
+// Update round duration (with ownership check and lock validation)
 export const updateRoundDuration = mutation({
   args: {
     id: v.id("events"),
     roundDuration: v.number(),
   },
   handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.id, userId)
+    await validateEventNotLocked(ctx, args.id)
     const duration = args.roundDuration > 0 ? args.roundDuration : undefined
     await ctx.db.patch(args.id, { roundDuration: duration })
   },
 })
 
-// Update number of rounds (handles regenerating assignments if event is assigned)
+// Update number of rounds (with ownership check, lock validation, handles regenerating assignments if event is assigned)
 export const updateNumberOfRounds = mutation({
   args: {
     id: v.id("events"),
     numberOfRounds: v.number(),
   },
   handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.id, userId)
+    await validateEventNotLocked(ctx, args.id)
+
     const event = await ctx.db.get(args.id)
     if (!event) throw new Error("Event not found")
 
@@ -256,6 +400,11 @@ export const updateNumberOfRounds = mutation({
       )
       const shuffledGuests = shuffleArray([...unpinnedGuests])
 
+      // Note: For updateNumberOfRounds, we skip cross-event history for simplicity
+      // since we're adding rounds to an already-assigned event
+      const emptyGuestEmails = new Map<string, string>()
+      const emptyCrossEventHistory: CrossEventHistory = new Map()
+
       for (const guest of shuffledGuests) {
         let bestTable = -1
         let bestScore = Infinity
@@ -272,7 +421,9 @@ export const updateNumberOfRounds = mutation({
             tablemateHistory,
             previousTableNum,
             matchingWeights,
-            constraints
+            constraints,
+            emptyGuestEmails,
+            emptyCrossEventHistory
           )
 
           if (score < bestScore) {
@@ -311,7 +462,7 @@ export const updateNumberOfRounds = mutation({
   },
 })
 
-// Update round settings (numberOfRounds and roundDuration) - legacy, use specific mutations instead
+// Update round settings (with ownership check and lock validation) - legacy, use specific mutations instead
 export const updateRoundSettings = mutation({
   args: {
     id: v.id("events"),
@@ -319,6 +470,10 @@ export const updateRoundSettings = mutation({
     roundDuration: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.id, userId)
+    await validateEventNotLocked(ctx, args.id)
+
     const updates: { numberOfRounds?: number; roundDuration?: number } = {}
     if (args.numberOfRounds !== undefined) {
       updates.numberOfRounds = Math.max(1, Math.min(10, args.numberOfRounds))
@@ -330,10 +485,13 @@ export const updateRoundSettings = mutation({
   },
 })
 
-// Start the next round
+// Start the next round (with ownership check)
 export const startNextRound = mutation({
   args: { id: v.id("events") },
   handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.id, userId)
+
     const event = await ctx.db.get(args.id)
     if (!event) throw new Error("Event not found")
     if (!event.isAssigned) throw new Error("Tables must be assigned first")
@@ -355,10 +513,13 @@ export const startNextRound = mutation({
   },
 })
 
-// End the current round early (mark as complete, clear timer)
+// End the current round early (with ownership check)
 export const endCurrentRound = mutation({
   args: { id: v.id("events") },
   handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.id, userId)
+
     const event = await ctx.db.get(args.id)
     if (!event) throw new Error("Event not found")
     if (!event.currentRound || event.currentRound === 0) {
@@ -376,10 +537,13 @@ export const endCurrentRound = mutation({
   },
 })
 
-// Reset rounds back to "not started" state (keeps table assignments)
+// Reset rounds back to "not started" state (with ownership check)
 export const resetRounds = mutation({
   args: { id: v.id("events") },
   handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.id, userId)
+
     const event = await ctx.db.get(args.id)
     if (!event) throw new Error("Event not found")
 
@@ -394,10 +558,13 @@ export const resetRounds = mutation({
   },
 })
 
-// Pause the current round timer
+// Pause the current round timer (with ownership check)
 export const pauseRound = mutation({
   args: { id: v.id("events") },
   handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.id, userId)
+
     const event = await ctx.db.get(args.id)
     if (!event) throw new Error("Event not found")
     if (!event.currentRound || event.currentRound === 0) {
@@ -423,10 +590,13 @@ export const pauseRound = mutation({
   },
 })
 
-// Resume the current round timer
+// Resume the current round timer (with ownership check)
 export const resumeRound = mutation({
   args: { id: v.id("events") },
   handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.id, userId)
+
     const event = await ctx.db.get(args.id)
     if (!event) throw new Error("Event not found")
     if (!event.isPaused) {
@@ -452,10 +622,13 @@ export const resumeRound = mutation({
   },
 })
 
-// Delete event and all associated guests/tables/assignments
+// Delete event and all associated guests/tables/assignments (with ownership check)
 export const remove = mutation({
   args: { id: v.id("events") },
   handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.id, userId)
+
     // Delete all round assignments for this event
     const assignments = await ctx.db
       .query("guestRoundAssignments")
@@ -521,6 +694,9 @@ type ConstraintData = {
   attracts: Set<string>      // "guestId1-guestId2" pairs (sorted)
 }
 
+// Cross-event history data structure
+type CrossEventHistory = Map<string, number> // "email1:email2" -> count of events together
+
 // Calculate assignment score for placing a guest at a table
 // Lower score = better placement
 function calculateAssignmentScore(
@@ -530,7 +706,10 @@ function calculateAssignmentScore(
   tablemateHistory: Map<string, Set<string>>,
   previousTableNumber: number | null,
   matchingWeights: MatchingWeights = DEFAULT_WEIGHTS,
-  constraints?: ConstraintData
+  constraints?: ConstraintData,
+  guestEmails?: Map<string, string>, // guestId -> email
+  crossEventHistory?: CrossEventHistory, // for cross-event novelty
+  noveltyPreference: number = 0.5 // 0 = ignore history, 1 = strongly prefer new connections
 ): number {
   // Base constraints (always applied)
   const BASE_WEIGHTS = { travelDistance: 0.3 }
@@ -561,7 +740,7 @@ function calculateAssignmentScore(
     }
   }
 
-  // 1. Repeat Tablemate Score - count previous tablemates at table
+  // 1. Repeat Tablemate Score - count previous tablemates at table (within-event)
   // This uses repeatAvoidance from matching config
   const guestHistory = tablemateHistory.get(guest._id) || new Set()
   let repeatCount = 0
@@ -573,23 +752,59 @@ function calculateAssignmentScore(
   // Higher repeatAvoidance weight means stronger penalty for repeat tablemates
   const repeatTablemateScore = repeatCount * matchingWeights.repeatAvoidance
 
+  // 1b. Cross-Event History Score - penalize sitting with past tablemates from other events
+  // This encourages "novelty" - meeting new people across events
+  // Only applies if noveltyPreference > 0
+  let crossEventScore = 0
+  if (crossEventHistory && guestEmails && noveltyPreference > 0) {
+    const guestEmail = guestEmails.get(guest._id.toString())
+    if (guestEmail) {
+      for (const tableGuest of currentTableGuests) {
+        const tableGuestEmail = guestEmails.get(tableGuest._id.toString())
+        if (tableGuestEmail) {
+          // Create canonical pair key
+          const [e1, e2] = guestEmail < tableGuestEmail
+            ? [guestEmail, tableGuestEmail]
+            : [tableGuestEmail, guestEmail]
+          const pairKey = `${e1}:${e2}`
+          const pastEvents = crossEventHistory.get(pairKey) || 0
+
+          // Apply penalty based on how many past events they sat together
+          // Scale by noveltyPreference (0-1) and repeatAvoidance weight
+          // The more times they've sat together, the stronger the penalty
+          crossEventScore += pastEvents * matchingWeights.repeatAvoidance * noveltyPreference
+        }
+      }
+    }
+  }
+
   // 2. Travel Distance Score - distance from previous table (small weight)
   let travelDistanceScore = 0
   if (previousTableNumber !== null) {
     travelDistanceScore = Math.abs(tableNumber - previousTableNumber) * BASE_WEIGHTS.travelDistance
   }
 
-  // 3. Guest Compatibility Score - uses matching algorithm
+  // 3. Department Concentration Penalty - non-linear scaling
+  // Strongly discourages having many people from same department at one table
+  const departmentConcentrationScore = calculateDepartmentConcentrationPenalty(
+    guest.department,
+    currentTableGuests,
+    matchingWeights.departmentMix
+  )
+
+  // 4. Guest Compatibility Score - uses matching algorithm (excludes department since handled above)
   // Calculate average compatibility with current table guests
   // Higher compatibility = lower score (we're minimizing)
   let compatibilityScore = 0
   if (currentTableGuests.length > 0) {
+    // Use weights without department mixing since we handle it separately with concentration penalty
+    const weightsWithoutDept = { ...matchingWeights, departmentMix: 0 }
     let totalCompatibility = 0
     for (const tableGuest of currentTableGuests) {
       totalCompatibility += calculateGuestCompatibility(
         { department: guest.department, attributes: guest.attributes },
         { department: tableGuest.department, attributes: tableGuest.attributes },
-        matchingWeights
+        weightsWithoutDept
       )
     }
     // Average compatibility, inverted (higher compat = lower score)
@@ -598,9 +813,9 @@ function calculateAssignmentScore(
   }
 
   // Combine scores
-  // repeatTablemateScore and travelDistanceScore are penalties (higher = worse)
+  // repeatTablemateScore, travelDistanceScore, crossEventScore, and departmentConcentrationScore are penalties
   // compatibilityScore is inverted compatibility (lower = better compat)
-  return score + repeatTablemateScore + travelDistanceScore + compatibilityScore
+  return score + repeatTablemateScore + travelDistanceScore + compatibilityScore + crossEventScore + departmentConcentrationScore
 }
 
 // Build tablemate history from previous rounds
@@ -638,10 +853,112 @@ function buildTablemateHistory(
   return history
 }
 
-// Assign tables to guests (supports multiple rounds)
+// =============================================================================
+// Seating History Recording (Cross-Event Memory)
+// =============================================================================
+
+/**
+ * Record seating history for cross-event novelty tracking.
+ * Uses guest emails as identifiers so history persists across events.
+ */
+async function recordSeatingHistory(
+  ctx: MutationCtx,
+  organizerId: string,
+  eventId: Id<"events">,
+  guests: GuestDoc[],
+  allRoundAssignments: Map<number, Map<string, number>>
+): Promise<{ recorded: number; skipped: number }> {
+  // Build a quick lookup from guestId to guest with email
+  const guestMap = new Map<string, { email?: string }>()
+  for (const guest of guests) {
+    const fullGuest = await ctx.db.get(guest._id)
+    if (fullGuest?.email) {
+      guestMap.set(guest._id, { email: fullGuest.email.toLowerCase().trim() })
+    }
+  }
+
+  let recorded = 0
+  let skipped = 0
+
+  // For each round, find who sat together and record pairs
+  for (const [roundNumber, guestTables] of allRoundAssignments) {
+    // Group guests by table
+    const tableGuests = new Map<number, string[]>()
+    for (const [guestId, tableNum] of guestTables) {
+      if (!tableGuests.has(tableNum)) {
+        tableGuests.set(tableNum, [])
+      }
+      tableGuests.get(tableNum)!.push(guestId)
+    }
+
+    // Generate all pairs at each table
+    for (const guestIdsAtTable of tableGuests.values()) {
+      // Get emails for guests at this table
+      const emailsAtTable: string[] = []
+      for (const guestId of guestIdsAtTable) {
+        const guest = guestMap.get(guestId)
+        if (guest?.email) {
+          emailsAtTable.push(guest.email)
+        }
+      }
+
+      // Record all pairs
+      for (let i = 0; i < emailsAtTable.length; i++) {
+        for (let j = i + 1; j < emailsAtTable.length; j++) {
+          const email1 = emailsAtTable[i]
+          const email2 = emailsAtTable[j]
+
+          // Create canonical pair (alphabetically sorted)
+          const [canonical1, canonical2] = email1 < email2
+            ? [email1, email2]
+            : [email2, email1]
+
+          // Check if this pair already exists for this event/round
+          const existing = await ctx.db
+            .query("seatingHistory")
+            .withIndex("by_organizer_pair", (q) =>
+              q
+                .eq("organizerId", organizerId)
+                .eq("guestEmail", canonical1)
+                .eq("partnerEmail", canonical2)
+            )
+            .filter((q) =>
+              q.and(
+                q.eq(q.field("eventId"), eventId),
+                q.eq(q.field("roundNumber"), roundNumber)
+              )
+            )
+            .first()
+
+          if (existing) {
+            skipped++
+            continue
+          }
+
+          await ctx.db.insert("seatingHistory", {
+            organizerId,
+            guestEmail: canonical1,
+            partnerEmail: canonical2,
+            eventId,
+            roundNumber,
+            timestamp: new Date().toISOString(),
+          })
+          recorded++
+        }
+      }
+    }
+  }
+
+  return { recorded, skipped }
+}
+
+// Assign tables to guests (with ownership check, supports multiple rounds)
 export const assignTables = mutation({
   args: { id: v.id("events") },
   handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.id, userId)
+
     const event = await ctx.db.get(args.id)
     if (!event) throw new Error("Event not found")
 
@@ -661,6 +978,9 @@ export const assignTables = mutation({
     const matchingWeights: MatchingWeights = matchingConfig?.weights
       ? { ...DEFAULT_WEIGHTS, ...matchingConfig.weights }
       : DEFAULT_WEIGHTS
+
+    // Get novelty preference for cross-event history scoring (0-1, default 0.5)
+    const noveltyPreference = matchingConfig?.noveltyPreference ?? 0.5
 
     // Fetch constraints for this event
     const constraintDocs = await ctx.db
@@ -689,6 +1009,50 @@ export const assignTables = mutation({
 
     const numberOfRounds = event.numberOfRounds || 1
     const numTables = Math.ceil(guests.length / event.tableSize)
+
+    // Build guest email lookup for cross-event history
+    const guestEmails = new Map<string, string>()
+    for (const guest of guests) {
+      const fullGuest = await ctx.db.get(guest._id)
+      if (fullGuest?.email) {
+        guestEmails.set(guest._id.toString(), fullGuest.email.toLowerCase().trim())
+      }
+    }
+
+    // Query cross-event seating history for novelty scoring
+    // Only query if we have an authenticated user
+    const crossEventHistory: CrossEventHistory = new Map()
+    if (userId) {
+      // Get all unique emails for this event's guests
+      const uniqueEmails = [...new Set(guestEmails.values())]
+
+      // Query history for each email (as guestEmail)
+      for (const email of uniqueEmails) {
+        const history = await ctx.db
+          .query("seatingHistory")
+          .withIndex("by_organizer_guest", (q) =>
+            q.eq("organizerId", userId).eq("guestEmail", email)
+          )
+          .filter((q) => q.neq(q.field("eventId"), args.id)) // Exclude current event
+          .collect()
+
+        // Count unique events per pair
+        for (const record of history) {
+          const [e1, e2] = email < record.partnerEmail
+            ? [email, record.partnerEmail]
+            : [record.partnerEmail, email]
+          const pairKey = `${e1}:${e2}`
+
+          // Only count if partner is also in this event
+          if (uniqueEmails.includes(record.partnerEmail)) {
+            // We want to count unique events, not rounds
+            // For simplicity, increment by 1 for each historical record
+            // (more records = sat together more times)
+            crossEventHistory.set(pairKey, (crossEventHistory.get(pairKey) || 0) + 1)
+          }
+        }
+      }
+    }
 
     // Delete existing tables
     const existingTables = await ctx.db
@@ -777,7 +1141,6 @@ export const assignTables = mutation({
 
         // Round-robin distribution with constraint awareness
         const departments = shuffleArray(Object.keys(byDepartment))
-        let tableIndex = 0
 
         for (const dept of departments) {
           for (const guest of byDepartment[dept]) {
@@ -795,7 +1158,10 @@ export const assignTables = mutation({
                 tablemateHistory,
                 null,
                 matchingWeights,
-                constraints
+                constraints,
+                guestEmails,
+                crossEventHistory,
+                noveltyPreference
               )
 
               if (score < bestScore) {
@@ -807,7 +1173,6 @@ export const assignTables = mutation({
             if (bestTable >= 0) {
               tables[bestTable].push(guest)
               roundAssignment.set(guest._id, bestTable + 1)
-              tableIndex = (bestTable + 1) % numTables
             }
           }
         }
@@ -828,7 +1193,10 @@ export const assignTables = mutation({
               tablemateHistory,
               null,
               matchingWeights,
-              constraints
+              constraints,
+              guestEmails,
+              crossEventHistory,
+              noveltyPreference
             )
 
             if (score < bestScore) {
@@ -862,7 +1230,10 @@ export const assignTables = mutation({
               tablemateHistory,
               previousTableNum,
               matchingWeights,
-              constraints
+              constraints,
+              guestEmails,
+              crossEventHistory,
+              noveltyPreference
             )
 
             if (score < bestScore) {
@@ -918,14 +1289,23 @@ export const assignTables = mutation({
       roundStartedAt: undefined,
     })
 
+    // Record seating history for cross-event novelty tracking
+    // Only record if we have authenticated user (organizer)
+    if (userId) {
+      await recordSeatingHistory(ctx, userId, args.id, guests, allRoundAssignments)
+    }
+
     return { numTables, numGuests: guests.length, numberOfRounds }
   },
 })
 
-// Reset all assignments
+// Reset all assignments (with ownership check)
 export const resetAssignments = mutation({
   args: { id: v.id("events") },
   handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.id, userId)
+
     // Delete all round assignments
     const assignments = await ctx.db
       .query("guestRoundAssignments")
@@ -965,18 +1345,20 @@ export const resetAssignments = mutation({
   },
 })
 
-// Update theme preset
+// Update theme preset (with ownership check)
 export const updateThemePreset = mutation({
   args: {
     id: v.id("events"),
     themePreset: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.id, userId)
     await ctx.db.patch(args.id, { themePreset: args.themePreset })
   },
 })
 
-// Update custom colors
+// Update custom colors (with ownership check)
 export const updateCustomColors = mutation({
   args: {
     id: v.id("events"),
@@ -990,14 +1372,18 @@ export const updateCustomColors = mutation({
     })),
   },
   handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.id, userId)
     await ctx.db.patch(args.id, { customColors: args.customColors })
   },
 })
 
-// Clear custom theme (reset to default)
+// Clear custom theme (with ownership check)
 export const clearCustomTheme = mutation({
   args: { id: v.id("events") },
   handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.id, userId)
     await ctx.db.patch(args.id, {
       themePreset: undefined,
       customColors: undefined,
@@ -1005,7 +1391,7 @@ export const clearCustomTheme = mutation({
   },
 })
 
-// Update email settings
+// Update email settings (with ownership check)
 export const updateEmailSettings = mutation({
   args: {
     id: v.id("events"),
@@ -1017,30 +1403,36 @@ export const updateEmailSettings = mutation({
     }),
   },
   handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.id, userId)
     await ctx.db.patch(args.id, { emailSettings: args.emailSettings })
   },
 })
 
-// Clear email settings
+// Clear email settings (with ownership check)
 export const clearEmailSettings = mutation({
   args: { id: v.id("events") },
   handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.id, userId)
     await ctx.db.patch(args.id, { emailSettings: undefined })
   },
 })
 
-// Update event type
+// Update event type (with ownership check)
 export const updateEventType = mutation({
   args: {
     id: v.id("events"),
     eventType: v.string(),
   },
   handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.id, userId)
     await ctx.db.patch(args.id, { eventType: args.eventType })
   },
 })
 
-// Update event type settings (custom terminology)
+// Update event type settings (with ownership check)
 export const updateEventTypeSettings = mutation({
   args: {
     id: v.id("events"),
@@ -1055,14 +1447,49 @@ export const updateEventTypeSettings = mutation({
     }),
   },
   handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.id, userId)
     await ctx.db.patch(args.id, { eventTypeSettings: args.eventTypeSettings })
   },
 })
 
-// Clear event type settings (revert to preset defaults)
+// Clear event type settings (with ownership check)
 export const clearEventTypeSettings = mutation({
   args: { id: v.id("events") },
   handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.id, userId)
     await ctx.db.patch(args.id, { eventTypeSettings: undefined })
+  },
+})
+
+// Update guest self-service settings (with ownership check)
+export const updateSelfServiceSettings = mutation({
+  args: {
+    id: v.id("events"),
+    selfServiceDeadline: v.optional(v.union(v.string(), v.null())),
+    selfServiceNotificationsEnabled: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx)
+    await verifyEventOwnership(ctx, args.id, userId)
+
+    const updates: {
+      selfServiceDeadline?: string | undefined
+      selfServiceNotificationsEnabled?: boolean
+    } = {}
+
+    // Handle deadline - null means clear it, undefined means don't change
+    if (args.selfServiceDeadline !== undefined) {
+      updates.selfServiceDeadline = args.selfServiceDeadline === null
+        ? undefined
+        : args.selfServiceDeadline
+    }
+
+    if (args.selfServiceNotificationsEnabled !== undefined) {
+      updates.selfServiceNotificationsEnabled = args.selfServiceNotificationsEnabled
+    }
+
+    await ctx.db.patch(args.id, updates)
   },
 })

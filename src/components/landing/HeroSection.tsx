@@ -1,10 +1,10 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Button } from "@/components/ui/button";
-import { Sparkles, ArrowDown } from "lucide-react";
-import { SpeechBubble } from "./SpeechBubble";
+import { ArrowDown, Sparkles } from "lucide-react";
 import Image from "next/image";
+import { Button } from "@/components/ui/button";
+import { SpeechBubble } from "./SpeechBubble";
 
 export const HeroSection = () => {
   return (
@@ -37,7 +37,7 @@ export const HeroSection = () => {
           >
             <div className="relative max-w-sm mx-auto">
               {/* Glowing circle behind dog */}
-              <div className="absolute inset-0 bg-gradient-to-br from-primary/30 to-accent/30 rounded-full blur-3xl" />
+              <div className="absolute inset-0 bg-linear-to-br from-primary/30 to-accent/30 rounded-full blur-3xl" />
 
               {/* The good boy */}
               <Image
@@ -51,7 +51,7 @@ export const HeroSection = () => {
               {/* Static decorative elements around the dog */}
               {["💕", "🐾", "⭐"].map((emoji, i) => (
                 <span
-                  key={i}
+                  key={emoji}
                   className="absolute text-2xl opacity-80"
                   style={{
                     top: `${20 + i * 25}%`,
@@ -76,10 +76,9 @@ export const HeroSection = () => {
               <SpeechBubble direction="left" className="mb-6">
                 <h1 className="font-display text-3xl md:text-4xl lg:text-5xl leading-tight mb-4 text-foreground">
                   <span className="text-primary">*ahem*</span>
+                  <br />I am a border collie.
                   <br />
-                  I am a border collie.
-                  <br />
-                  <span className="bg-gradient-to-r from-primary via-pink-500 to-accent bg-clip-text text-transparent">
+                  <span className="bg-linear-to-r from-primary via-pink-500 to-accent bg-clip-text text-transparent">
                     I will seat your conference.
                   </span>
                 </h1>

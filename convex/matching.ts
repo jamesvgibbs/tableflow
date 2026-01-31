@@ -301,3 +301,98 @@ export const DEFAULT_WEIGHTS: MatchingWeights = {
   goalCompatibility: 0.4,
   repeatAvoidance: 0.9,
 }
+
+/**
+ * Calculate department concentration penalty for placing a guest at a table.
+ * Returns a penalty that increases non-linearly as more people from the same
+ * department are at the table.
+ *
+ * The penalty uses exponential scaling to strongly discourage high concentration:
+ * - 0 people from same dept: 0 penalty
+ * - 1 person from same dept: weight × 1
+ * - 2 people from same dept: weight × 2.5
+ * - 3 people from same dept: weight × 5
+ * - 4+ people from same dept: weight × 10 (hard discouragement)
+ *
+ * @param guestDepartment - Department of the guest being placed
+ * @param tableGuests - Current guests at the table
+ * @param departmentMixWeight - Weight from matching config (higher = stronger penalty)
+ * @returns Penalty score (higher = worse placement)
+ */
+export function calculateDepartmentConcentrationPenalty(
+  guestDepartment: string | undefined,
+  tableGuests: Array<{ department?: string }>,
+  departmentMixWeight: number
+): number {
+  if (!guestDepartment || departmentMixWeight === 0) return 0
+
+  const normalizedGuestDept = guestDepartment.toLowerCase().trim()
+
+  // Count how many people from same department are already at table
+  const sameDeptCount = tableGuests.filter(
+    (g) => g.department?.toLowerCase().trim() === normalizedGuestDept
+  ).length
+
+  // No penalty if this would be the first person from this department
+  if (sameDeptCount === 0) return 0
+
+  // Non-linear penalty scaling
+  // This creates a "soft cap" effect - adding the 4th person from same dept
+  // is much more penalized than adding the 2nd
+  const CONCENTRATION_MULTIPLIERS = [0, 1, 2.5, 5, 10, 15, 20]
+  const multiplier = CONCENTRATION_MULTIPLIERS[Math.min(sameDeptCount, 6)]
+
+  return departmentMixWeight * multiplier
+}
+
+/**
+ * Count guests per department at a table.
+ * Useful for analyzing table composition.
+ */
+export function countDepartmentDistribution(
+  tableGuests: Array<{ department?: string }>
+): Map<string, number> {
+  const distribution = new Map<string, number>()
+
+  for (const guest of tableGuests) {
+    const dept = guest.department?.toLowerCase().trim() || 'none'
+    distribution.set(dept, (distribution.get(dept) || 0) + 1)
+  }
+
+  return distribution
+}
+
+/**
+ * Calculate a department mixing score for an entire table.
+ * Higher score = better mixing (more diverse departments).
+ * Used for evaluating assignment quality.
+ *
+ * @param tableGuests - Guests at the table
+ * @returns Score from 0-1 where 1 = perfect mixing (all different departments)
+ */
+export function calculateTableDepartmentMixingScore(
+  tableGuests: Array<{ department?: string }>
+): number {
+  if (tableGuests.length < 2) return 1 // Can't calculate mixing with < 2 people
+
+  const distribution = countDepartmentDistribution(tableGuests)
+
+  // Calculate using normalized entropy
+  // Perfect mixing = each person from different dept = entropy of log(n)
+  // Worst mixing = all from same dept = entropy of 0
+
+  const totalGuests = tableGuests.length
+  let entropy = 0
+
+  for (const count of distribution.values()) {
+    if (count > 0) {
+      const probability = count / totalGuests
+      entropy -= probability * Math.log2(probability)
+    }
+  }
+
+  // Normalize: max entropy is log2(n) when all guests from different depts
+  const maxEntropy = Math.log2(totalGuests)
+
+  return maxEntropy > 0 ? entropy / maxEntropy : 1
+}

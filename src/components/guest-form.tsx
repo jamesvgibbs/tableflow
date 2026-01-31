@@ -101,7 +101,6 @@ export function GuestForm({
   initialGuest,
   mode = 'create',
   departmentLabel = "Department",
-  guestLabel = "Guest",
   seatingType,
 }: GuestFormProps) {
   const [name, setName] = React.useState(initialGuest?.name ?? "")

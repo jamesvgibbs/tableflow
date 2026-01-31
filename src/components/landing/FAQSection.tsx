@@ -7,6 +7,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+
 const faqs = [
   {
     question: "How do you know who to seat together?",
@@ -64,7 +65,7 @@ export const FAQSection = () => {
         <Accordion type="single" collapsible className="space-y-4">
           {faqs.map((faq, index) => (
             <motion.div
-              key={index}
+              key={faq.question}
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
@@ -76,7 +77,7 @@ export const FAQSection = () => {
               >
                 <AccordionTrigger className="text-left font-display text-lg hover:no-underline py-6 group">
                   <span className="flex items-center gap-4">
-                    <span className="w-10 h-10 bg-gradient-to-br from-primary/20 to-accent/20 rounded-full flex items-center justify-center text-xl group-hover:scale-110 transition-transform">
+                    <span className="w-10 h-10 bg-linear-to-br from-primary/20 to-accent/20 rounded-full flex items-center justify-center text-xl group-hover:scale-110 transition-transform">
                       🐾
                     </span>
                     <span className="text-foreground">{faq.question}</span>

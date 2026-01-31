@@ -1,4 +1,5 @@
 import "./landing.css"
+import { Footer } from "@/components/footer"
 
 export default function MarketingLayout({
   children,
@@ -6,8 +7,11 @@ export default function MarketingLayout({
   children: React.ReactNode
 }) {
   return (
-    <div className="landing-page">
-      {children}
+    <div className="landing-page flex min-h-screen flex-col">
+      <div className="flex-1">
+        {children}
+      </div>
+      <Footer />
     </div>
   )
 }
