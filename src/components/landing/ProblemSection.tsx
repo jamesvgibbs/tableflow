@@ -1,8 +1,7 @@
 "use client";
 import { motion } from "framer-motion";
-
-import { SpeechBubble } from "./SpeechBubble";
 import Image from "next/image";
+import { SpeechBubble } from "./SpeechBubble";
 
 export const ProblemSection = () => {
   const problems = [
@@ -79,7 +78,7 @@ export const ProblemSection = () => {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ delay: 0.7 }}
-              className="bg-gradient-to-r from-primary/10 to-accent/10 rounded-3xl p-6 border-2 border-primary/20"
+              className="bg-linear-to-r from-primary/10 to-accent/10 rounded-3xl p-6 border-2 border-primary/20"
             >
               <p className="text-xl font-bold text-foreground">
                 The humans had no system. They had only hope.
@@ -103,7 +102,7 @@ export const ProblemSection = () => {
           >
             <div className="relative">
               {/* Decorative frame */}
-              <div className="absolute -inset-4 bg-gradient-to-br from-primary/20 to-accent/20 rounded-3xl blur-xl" />
+              <div className="absolute -inset-4 bg-linear-to-br from-primary/20 to-accent/20 rounded-3xl blur-xl" />
               <Image
                 src="/problem-illustration.png"
                 width={1000}

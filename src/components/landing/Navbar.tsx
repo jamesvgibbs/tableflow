@@ -21,7 +21,7 @@ export const Navbar = () => {
               className="flex items-center gap-2 font-display text-xl font-bold text-foreground"
             >
               <span className="text-2xl">🐕</span>
-              <span className="bg-gradient-to-r from-primary to-pink-500 bg-clip-text text-transparent">
+              <span className="bg-linear-to-r from-primary to-pink-500 bg-clip-text text-transparent">
                 Seatherder
               </span>
             </Link>
