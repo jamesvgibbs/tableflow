@@ -105,6 +105,7 @@ export const getByEventWithDefaults = query({
     return {
       eventId: args.eventId,
       weights: DEFAULT_WEIGHTS,
+      noveltyPreference: 0.5,
       interestOptions: null,
       goalOptions: null,
       updatedAt: new Date().toISOString(),

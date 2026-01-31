@@ -169,7 +169,7 @@ export default function SessionsPage({ params }: PageProps) {
         await updateSession({
           id: editingSession._id,
           name: formData.name.trim(),
-          description: formData.description?.trim() || null,
+          description: formData.description?.trim() || undefined,
           startTime: formData.startTime ? new Date(formData.startTime).toISOString() : null,
           endTime: formData.endTime ? new Date(formData.endTime).toISOString() : null,
           roomId: formData.roomId ? (formData.roomId as Id<'rooms'>) : null,
