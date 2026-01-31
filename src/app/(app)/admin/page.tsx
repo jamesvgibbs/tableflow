@@ -4,12 +4,12 @@ import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { useQuery, useMutation } from 'convex/react'
-import { UserButton, useUser } from '@clerk/nextjs'
+import { useUser } from '@clerk/nextjs'
 import { api } from '@convex/_generated/api'
 import { Id } from '@convex/_generated/dataModel'
-import { ProtectedRoute } from '@/components/protected-route'
 import { generateEventName } from '@/lib/event-names'
 import { EVENT_TYPES, DEFAULT_EVENT_TYPE } from '@/lib/event-types'
+import { removeRecentEvent } from '@/lib/recent-events'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -25,10 +25,9 @@ import {
 } from '@/components/ui/dialog'
 import { EventTypeSelector, EventTypeDisplay } from '@/components/event-type-selector'
 import { WelcomeModal } from '@/components/welcome-modal'
-import { Plus, Trash2, Table as TableIcon, Calendar, ArrowLeft } from 'lucide-react'
-import Link from 'next/link'
+import { Plus, Trash2, Table as TableIcon, Calendar } from 'lucide-react'
 
-function AdminDashboard() {
+export default function AdminPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user } = useUser()
@@ -127,6 +126,8 @@ function AdminDashboard() {
     if (!deleteDialogEvent) return
     try {
       await deleteEventMutation({ id: deleteDialogEvent.id as Id<'events'> })
+      // Remove from recent events
+      removeRecentEvent(deleteDialogEvent.id)
       toast.success('Event removed. I have forgotten it.')
     } catch {
       toast.error('I could not remove the event. Something is wrong.')
@@ -146,201 +147,170 @@ function AdminDashboard() {
 
   if (events === undefined) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
-        <div className="container mx-auto max-w-4xl px-4 py-12">
-          <div className="flex items-center justify-center h-64">
-            <p className="text-muted-foreground">Fetching your events...</p>
-          </div>
+      <div className="container mx-auto max-w-4xl px-4 py-8">
+        <div className="flex items-center justify-center h-64">
+          <p className="text-muted-foreground">Fetching your events...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
-      <div className="container mx-auto max-w-4xl px-4 py-12">
-        {/* Header Section */}
-        <div className="flex items-center justify-between mb-8">
-          <Link
-            href="/"
-            className="text-sm text-muted-foreground hover:text-primary inline-flex items-center gap-1"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to home
-          </Link>
-          <UserButton
-            afterSignOutUrl="/"
-            appearance={{
-              elements: {
-                avatarBox: "h-9 w-9",
-              },
-            }}
-          />
-        </div>
+    <div className="container mx-auto max-w-4xl px-4 py-8">
+      <div className="text-center mb-12 animate-fade-in">
+        <h1 className="text-4xl font-bold mb-3 bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
+          {user?.firstName ? `Welcome back, ${user.firstName}` : 'Your Events'}
+        </h1>
+        <p className="text-lg text-muted-foreground">
+          I keep track of your events. Pick one, or start something new.
+        </p>
+      </div>
 
-        <div className="text-center mb-12 animate-fade-in">
-          <h1 className="text-4xl font-bold mb-3 bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
-            {user?.firstName ? `Welcome back, ${user.firstName}` : 'Your Events'}
-          </h1>
-          <p className="text-lg text-muted-foreground">
-            I keep track of your events. Pick one, or start something new.
-          </p>
-        </div>
+      {/* Create New Event Button */}
+      <div className="flex justify-center mb-8 animate-slide-up">
+        <Button
+          size="lg"
+          onClick={handleOpenCreateDialog}
+          className="gap-2 shadow-lg hover:shadow-xl transition-shadow"
+        >
+          <Plus className="h-5 w-5" />
+          Start a New Event
+        </Button>
+      </div>
 
-        {/* Create New Event Button */}
-        <div className="flex justify-center mb-8 animate-slide-up">
-          <Button
-            size="lg"
-            onClick={handleOpenCreateDialog}
-            className="gap-2 shadow-lg hover:shadow-xl transition-shadow"
-          >
-            <Plus className="h-5 w-5" />
-            Start a New Event
-          </Button>
-        </div>
-
-        {/* Events List */}
-        <div className="space-y-4 stagger-children">
-          {events.length === 0 ? (
-            <Card className="border-dashed animate-fade-in">
-              <CardContent className="flex flex-col items-center justify-center py-12">
-                <div className="rounded-full bg-muted p-4 mb-4">
-                  <TableIcon className="h-8 w-8 text-muted-foreground" />
+      {/* Events List */}
+      <div className="space-y-4 stagger-children">
+        {events.length === 0 ? (
+          <Card className="border-dashed animate-fade-in">
+            <CardContent className="flex flex-col items-center justify-center py-12">
+              <div className="rounded-full bg-muted p-4 mb-4">
+                <TableIcon className="h-8 w-8 text-muted-foreground" />
+              </div>
+              <p className="text-lg font-medium mb-2">No events yet. I am ready when you are.</p>
+              <p className="text-sm text-muted-foreground">
+                Tell me about your first event.
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          events.map((event) => (
+            <Card key={event._id} className="hover:shadow-md transition-shadow">
+              <CardHeader>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <CardTitle className="text-xl mb-2 truncate">
+                      {event.name}
+                    </CardTitle>
+                    <CardDescription className="flex flex-wrap items-center gap-3">
+                      <span className="flex items-center gap-1.5">
+                        <Calendar className="h-4 w-4" />
+                        {formatDate(event.createdAt)}
+                      </span>
+                      <EventTypeDisplay typeId={event.eventType} />
+                    </CardDescription>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {event.isAssigned ? (
+                      <Badge variant="default">Assigned</Badge>
+                    ) : (
+                      <Badge variant="outline">Draft</Badge>
+                    )}
+                  </div>
                 </div>
-                <p className="text-lg font-medium mb-2">No events yet. I am ready when you are.</p>
-                <p className="text-sm text-muted-foreground">
-                  Tell me about your first event.
-                </p>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-3">
+                  <Button
+                    onClick={() => handleOpenEvent(event._id)}
+                    className="flex-1"
+                  >
+                    Open Event
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="icon"
+                    onClick={() => handleDeleteClick(event._id, event.name)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
               </CardContent>
             </Card>
-          ) : (
-            events.map((event) => (
-              <Card key={event._id} className="hover:shadow-md transition-shadow">
-                <CardHeader>
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      <CardTitle className="text-xl mb-2 truncate">
-                        {event.name}
-                      </CardTitle>
-                      <CardDescription className="flex flex-wrap items-center gap-3">
-                        <span className="flex items-center gap-1.5">
-                          <Calendar className="h-4 w-4" />
-                          {formatDate(event.createdAt)}
-                        </span>
-                        <EventTypeDisplay typeId={event.eventType} />
-                      </CardDescription>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {event.isAssigned ? (
-                        <Badge variant="default">Assigned</Badge>
-                      ) : (
-                        <Badge variant="outline">Draft</Badge>
-                      )}
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center gap-3">
-                    <Button
-                      onClick={() => handleOpenEvent(event._id)}
-                      className="flex-1"
-                    >
-                      Open Event
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      size="icon"
-                      onClick={() => handleDeleteClick(event._id, event.name)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))
-          )}
-        </div>
+          ))
+        )}
+      </div>
 
-        {/* Delete Confirmation Dialog */}
-        <Dialog open={deleteDialogEvent !== null} onOpenChange={(open) => !open && setDeleteDialogEvent(null)}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Remove this event?</DialogTitle>
-              <DialogDescription>
-                Are you sure? I will forget everything about &quot;{deleteDialogEvent?.name}&quot;.
-                All the guests, all the seating. Gone.
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setDeleteDialogEvent(null)}>
-                Cancel
-              </Button>
-              <Button variant="destructive" onClick={confirmDelete}>
-                Yes, remove it
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogEvent !== null} onOpenChange={(open) => !open && setDeleteDialogEvent(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Remove this event?</DialogTitle>
+            <DialogDescription>
+              Are you sure? I will forget everything about &quot;{deleteDialogEvent?.name}&quot;.
+              All the guests, all the seating. Gone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialogEvent(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmDelete}>
+              Yes, remove it
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-        {/* Create Event Dialog */}
-        <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Let me start a new event</DialogTitle>
-              <DialogDescription>
-                What kind of event is this? I will set things up for you.
-              </DialogDescription>
-            </DialogHeader>
+      {/* Create Event Dialog */}
+      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Let me start a new event</DialogTitle>
+            <DialogDescription>
+              What kind of event is this? I will set things up for you.
+            </DialogDescription>
+          </DialogHeader>
 
-            <div className="space-y-6 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="event-name">Event Name</Label>
-                <Input
-                  id="event-name"
-                  value={newEventName}
-                  onChange={(e) => setNewEventName(e.target.value)}
-                  placeholder="What should I call it?"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Event Type</Label>
-                <EventTypeSelector
-                  value={newEventType}
-                  onChange={setNewEventType}
-                />
-              </div>
+          <div className="space-y-6 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="event-name">Event Name</Label>
+              <Input
+                id="event-name"
+                value={newEventName}
+                onChange={(e) => setNewEventName(e.target.value)}
+                placeholder="What should I call it?"
+              />
             </div>
 
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setShowCreateDialog(false)}
-                disabled={isCreating}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleCreateNewEvent}
-                disabled={isCreating || !newEventName.trim()}
-              >
-                {isCreating ? 'Setting things up...' : 'Let me start'}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+            <div className="space-y-2">
+              <Label>Event Type</Label>
+              <EventTypeSelector
+                value={newEventType}
+                onChange={setNewEventType}
+              />
+            </div>
+          </div>
 
-        {/* Welcome Modal for first-time users */}
-        <WelcomeModal open={showWelcome} onOpenChange={handleWelcomeClose} />
-      </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowCreateDialog(false)}
+              disabled={isCreating}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCreateNewEvent}
+              disabled={isCreating || !newEventName.trim()}
+            >
+              {isCreating ? 'Setting things up...' : 'Let me start'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Welcome Modal for first-time users */}
+      <WelcomeModal open={showWelcome} onOpenChange={handleWelcomeClose} />
     </div>
-  )
-}
-
-export default function AdminPage() {
-  return (
-    <ProtectedRoute>
-      <AdminDashboard />
-    </ProtectedRoute>
   )
 }

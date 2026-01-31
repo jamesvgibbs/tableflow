@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { Id } from "@convex/_generated/dataModel";
-import { ArrowLeft, Check, Sparkles } from "lucide-react";
+import { ArrowLeft, Check } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -131,8 +131,7 @@ export default function SeatingWizardPage({ params }: PageProps) {
               This event does not exist, or it wandered off. I am not sure which.
             </p>
             <Button onClick={() => router.push("/admin")} className="w-full">
-              <ArrowLeft className="mr-2 size-4" />
-              Back to Admin
+              Back to Dashboard
             </Button>
           </CardContent>
         </Card>
@@ -148,28 +147,16 @@ export default function SeatingWizardPage({ params }: PageProps) {
     : false;
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="bg-background">
       <div className="container mx-auto p-4 md:p-6 lg:p-8 max-w-2xl">
         {/* Header */}
-        <div className="space-y-4 mb-6">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => router.push(`/event/${eventId}`)}
-            className="gap-2"
-          >
-            <ArrowLeft className="size-4" />
-            Back to {event.name}
-          </Button>
-
-          <div className="space-y-1">
-            <h1 className="text-2xl md:text-3xl font-bold">
-              How should I seat your guests?
-            </h1>
-            <p className="text-muted-foreground">
-              Tell me about your event. I will figure out the rest.
-            </p>
-          </div>
+        <div className="space-y-1 mb-6">
+          <h1 className="text-2xl md:text-3xl font-bold">
+            How should I seat your guests?
+          </h1>
+          <p className="text-muted-foreground">
+            Tell me about your event. I will figure out the rest.
+          </p>
         </div>
 
         {/* Wizard Content */}

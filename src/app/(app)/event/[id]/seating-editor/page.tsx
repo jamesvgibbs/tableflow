@@ -19,7 +19,6 @@ import {
   useDraggable,
 } from "@dnd-kit/core"
 import {
-  ArrowLeft,
   Check,
   X,
   RefreshCw,
@@ -976,8 +975,7 @@ export default function SeatingEditorPage({ params }: PageProps) {
               This event does not exist. Perhaps it was deleted.
             </p>
             <Button onClick={() => router.push("/admin")} className="w-full">
-              <ArrowLeft className="mr-2 size-4" />
-              Take me back
+              Back to Dashboard
             </Button>
           </CardContent>
         </Card>
@@ -996,20 +994,11 @@ export default function SeatingEditorPage({ params }: PageProps) {
           <div className="container mx-auto p-4">
             <div className="flex items-center justify-between gap-4 flex-wrap">
               <div className="flex items-center gap-4">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => router.push(`/event/${eventId}`)}
-                >
-                  <ArrowLeft className="size-4 mr-2" />
-                  Back
-                </Button>
                 <div>
                   <div className="flex items-center gap-2">
                     <Dog className="w-5 h-5 text-amber-600" />
                     <h1 className="text-lg font-bold">I am arranging seats</h1>
                   </div>
-                  <p className="text-sm text-muted-foreground">{event.name}</p>
                 </div>
               </div>
 

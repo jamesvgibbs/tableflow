@@ -7,7 +7,6 @@ import { useQuery, useMutation, useAction } from "convex/react"
 import { api } from "@convex/_generated/api"
 import { Id } from "@convex/_generated/dataModel"
 import {
-  ArrowLeft,
   Mail,
   Send,
   Upload,
@@ -53,21 +52,11 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { SeatherderLoading } from "@/components/seatherder-loading"
-import { ProtectedRoute } from "@/components/protected-route"
-
 interface PageProps {
   params: Promise<{ id: string }>
 }
 
 export default function EmailsPage({ params }: PageProps) {
-  return (
-    <ProtectedRoute>
-      <EmailsPageContent params={params} />
-    </ProtectedRoute>
-  )
-}
-
-function EmailsPageContent({ params }: PageProps) {
   const router = useRouter()
 
   // Use React.use() for Next.js 15+ async params
@@ -353,8 +342,7 @@ function EmailsPageContent({ params }: PageProps) {
               The event you&apos;re looking for doesn&apos;t exist or has been deleted.
             </p>
             <Button onClick={() => router.push("/admin")} className="w-full">
-              <ArrowLeft className="mr-2 size-4" />
-              Back to Admin
+              Back to Dashboard
             </Button>
           </CardContent>
         </Card>
@@ -364,25 +352,12 @@ function EmailsPageContent({ params }: PageProps) {
 
   return (
     <TooltipProvider>
-      <div className="min-h-screen">
+      <div>
         <div className="container mx-auto p-4 md:p-6 lg:p-8 max-w-4xl">
           {/* Header */}
           <div className="space-y-4 mb-6">
-            <div className="flex items-center justify-between gap-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => router.push(`/event/${eventId}`)}
-                className="gap-2"
-              >
-                <ArrowLeft className="size-4" />
-                Back to Event
-              </Button>
-            </div>
-
             <div>
               <h1 className="text-2xl md:text-3xl font-bold">I can send your invitations</h1>
-              <p className="text-muted-foreground">{event.name}</p>
             </div>
 
             <Separator />

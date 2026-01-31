@@ -7,7 +7,6 @@ import { useQuery, useMutation } from 'convex/react'
 import { api } from '@convex/_generated/api'
 import type { Id } from '@convex/_generated/dataModel'
 import {
-  ArrowLeft,
   Plus,
   X,
   Search,
@@ -199,7 +198,6 @@ export default function SessionDetailPage({ params }: PageProps) {
               This session does not exist, or it wandered off.
             </p>
             <Button onClick={() => router.push(`/event/${eventId}/sessions`)} className="w-full">
-              <ArrowLeft className="mr-2 size-4" />
               Back to Sessions
             </Button>
           </CardContent>
@@ -214,20 +212,10 @@ export default function SessionDetailPage({ params }: PageProps) {
       : `${typedSession?.assignedGuests?.length || 0}`
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="bg-background">
       <div className="container mx-auto p-4 md:p-6 lg:p-8 max-w-4xl">
         {/* Header */}
         <div className="space-y-4 mb-8">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => router.push(`/event/${eventId}/sessions`)}
-            className="gap-2"
-          >
-            <ArrowLeft className="size-4" />
-            Back to Sessions
-          </Button>
-
           <div>
             <h1 className="text-2xl md:text-3xl font-bold">{typedSession?.name}</h1>
             <p className="text-muted-foreground">{event.name}</p>

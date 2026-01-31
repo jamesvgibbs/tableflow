@@ -7,7 +7,6 @@ import { useQuery, useMutation } from 'convex/react'
 import { api } from '@convex/_generated/api'
 import type { Id, Doc } from '@convex/_generated/dataModel'
 import {
-  ArrowLeft,
   Users,
   Search,
   X,
@@ -621,8 +620,7 @@ export default function LiveEventPage({ params }: PageProps) {
               This event does not exist, or it wandered off. I am not sure which.
             </p>
             <Button onClick={() => router.push('/admin')} className="w-full">
-              <ArrowLeft className="mr-2 size-4" />
-              Back to Admin
+              Back to Dashboard
             </Button>
           </CardContent>
         </Card>
@@ -688,24 +686,7 @@ export default function LiveEventPage({ params }: PageProps) {
             {/* Header Section */}
             <div className="space-y-4 mb-8">
               {/* Navigation */}
-              <div className="flex items-center justify-between">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => router.push(`/event/${eventId}`)}
-                  className="gap-2 transition-colors"
-                  style={themedStyles
-                    ? hoveredButton === 'back'
-                      ? themedStyles.ghostButtonHover
-                      : themedStyles.ghostButton
-                    : undefined
-                  }
-                  onMouseEnter={() => setHoveredButton('back')}
-                  onMouseLeave={() => setHoveredButton(null)}
-                >
-                  <ArrowLeft className="size-4" />
-                  Event Settings
-                </Button>
+              <div className="flex items-center justify-end">
                 <Button
                   variant="outline"
                   size="sm"
