@@ -2,7 +2,6 @@
 
 import * as React from "react"
 import Papa from "papaparse"
-import * as XLSX from "xlsx"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import {
@@ -392,42 +391,8 @@ export function CsvUpload({
             setError(`I had trouble reading this file: ${err.message}`)
           },
         })
-      } else if (fileExtension === "xlsx" || fileExtension === "xls") {
-        const arrayBuffer = await selectedFile.arrayBuffer()
-        const workbook = XLSX.read(arrayBuffer, { type: "array" })
-        const firstSheet = workbook.Sheets[workbook.SheetNames[0]]
-        const data = XLSX.utils.sheet_to_json<string[]>(firstSheet, {
-          header: 1,
-          defval: "",
-        })
-
-        if (data.length === 0) {
-          setError("This file is empty.")
-          return
-        }
-
-        const headerRow = data[0].map(String)
-        const dataRows = data.slice(1).filter((row) => row.some((cell) => cell.toString().trim()))
-
-        // Check for empty or duplicate headers
-        const emptyCount = headerRow.filter(h => !h.trim()).length
-        const validHeaders = headerRow.filter(h => h.trim())
-
-        if (validHeaders.length === 0) {
-          setError("I cannot find column headers. Make sure the first row has names.")
-          return
-        }
-
-        if (emptyCount > 0) {
-          setWarning(`${emptyCount} empty column header${emptyCount > 1 ? 's were' : ' was'} found and will be skipped.`)
-        }
-
-        setHeaders(headerRow)
-        setAllData(dataRows.map((row) => row.map(String)))
-        setPreviewData(dataRows.slice(0, 3).map((row) => row.map(String)))
-        autoDetectColumns(headerRow)
       } else {
-        setError("I can only read .csv, .xlsx, and .xls files.")
+        setError("I can only read .csv files.")
       }
     } catch (err) {
       setError(`I could not read this file: ${err instanceof Error ? err.message : "Unknown error"}`)
@@ -740,13 +705,13 @@ export function CsvUpload({
     <div className="space-y-4">
       {!file ? (
         <div className="space-y-2">
-          <Label htmlFor="file-upload">Upload CSV or Excel File</Label>
+          <Label htmlFor="file-upload">Upload CSV File</Label>
           <div className="flex items-center gap-2">
             <input
               ref={fileInputRef}
               id="file-upload"
               type="file"
-              accept=".csv,.xlsx,.xls"
+              accept=".csv"
               onChange={handleFileChange}
               className="hidden"
             />
@@ -761,7 +726,7 @@ export function CsvUpload({
             </Button>
           </div>
           <p className="text-sm text-muted-foreground">
-            I can read .csv, .xlsx, and .xls files.
+            I can read .csv files.
           </p>
         </div>
       ) : (
