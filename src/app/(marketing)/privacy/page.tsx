@@ -67,6 +67,7 @@ export default function PrivacyPage() {
             "Your Rights",
             "California Privacy Rights",
             "EU Privacy Rights",
+            "Other Jurisdictions",
             "International Transfers",
             "Security Breach Notification",
             "Children's Privacy",
@@ -79,13 +80,14 @@ export default function PrivacyPage() {
         <Divider />
 
         <Section id="information-we-collect" title="1. Information We Collect">
-          <SubSection title="Account Information">
+          <SubSection title="Information You Provide Directly">
             <Paragraph>When you create an account, we collect:</Paragraph>
             <BulletList
               items={[
                 "Your name and email address",
                 "Account credentials (managed securely through our authentication provider, Clerk)",
-                "Payment information (processed by our payment provider, Stripe)",
+                "Optional profile information (phone number, organization name)",
+                "Payment information (processed securely by our payment provider, Stripe)",
               ]}
             />
           </SubSection>
@@ -96,27 +98,61 @@ export default function PrivacyPage() {
             </Paragraph>
             <BulletList
               items={[
-                "Event details (name, date, settings, theme preferences)",
-                "Guest information you provide (names, emails, dietary restrictions, seating preferences)",
-                "Seating assignments and check-in records",
+                "Event details (name, date, settings, theme preferences, custom terminology)",
+                "Guest information you provide (names, emails, phone numbers, dietary restrictions, seating preferences)",
+                "Guest attributes for matching (department, interests, job level, goals, custom tags)",
+                "Seating assignments, check-in records, and QR code identifiers",
                 "Communication logs (emails sent through the Service)",
                 "Seating history for cross-event optimization",
+                "Breakout room and session assignments",
               ]}
             />
           </SubSection>
 
-          <SubSection title="Usage Data">
+          <SubSection title="Automatically Collected Information">
             <Paragraph>
               We automatically collect certain information when you use the
               Service:
             </Paragraph>
             <BulletList
               items={[
-                "Log data (IP address, browser type, pages visited)",
-                "Device information",
-                "Analytics about how you use the Service",
+                "Device and browser information (type, version, operating system)",
+                "IP address and general geographic location",
+                "Usage logs (pages viewed, features accessed, session duration)",
+                "Cookies and similar tracking technologies (see Section 9)",
+                "Error reports and performance data",
               ]}
             />
+          </SubSection>
+
+          <SubSection title="Information from Third Parties">
+            <Paragraph>We may receive information from:</Paragraph>
+            <BulletList
+              items={[
+                "Authentication providers (Clerk) when you sign in",
+                "Payment processors (Stripe) for transaction verification",
+                "Analytics services for aggregated usage patterns",
+              ]}
+            />
+          </SubSection>
+
+          <SubSection title="Sensitive Information">
+            <Paragraph>
+              Guest data you upload may contain sensitive information such as:
+            </Paragraph>
+            <BulletList
+              items={[
+                "Dietary restrictions that may reveal health conditions or religious beliefs",
+                "Contact information (phone numbers, email addresses)",
+                "Organizational hierarchy information (job levels, departments)",
+                "VIP status or special accommodation needs",
+              ]}
+            />
+            <ImportantNotice variant="info">
+              You are responsible for ensuring you have appropriate consent from
+              guests before uploading their personal information. Consider
+              limiting the data you collect to what is necessary for your event.
+            </ImportantNotice>
           </SubSection>
         </Section>
 
@@ -124,20 +160,69 @@ export default function PrivacyPage() {
           id="how-we-use-your-information"
           title="2. How We Use Your Information"
         >
-          <Paragraph>We use the information we collect to:</Paragraph>
-          <BulletList
-            items={[
-              "Provide and maintain the Service",
-              "Process your transactions and subscriptions",
-              "Send you service-related communications",
-              "Generate intelligent seating arrangements using our matching algorithm",
-              "Enable QR code check-in for your guests",
-              "Send emails on your behalf to guests (invitations, confirmations, reminders)",
-              "Improve and optimize the Service",
-              "Detect and prevent fraud or abuse",
-              "Comply with legal obligations",
-            ]}
-          />
+          <SubSection title="Service Delivery">
+            <Paragraph>
+              We use your information to provide and improve the Service:
+            </Paragraph>
+            <BulletList
+              items={[
+                "Account creation, management, and authentication",
+                "Processing subscriptions and payments",
+                "Generating intelligent seating arrangements using our matching algorithm",
+                "Enabling QR code check-in and real-time event management",
+                "Sending emails on your behalf to guests (invitations, confirmations, reminders)",
+                "Providing customer support and responding to inquiries",
+                "Personalizing your experience based on preferences",
+              ]}
+            />
+          </SubSection>
+
+          <SubSection title="Communications">
+            <Paragraph>We may communicate with you for:</Paragraph>
+            <BulletList
+              items={[
+                "Transactional emails (account verification, password resets, payment confirmations)",
+                "Service updates and important notices about changes to the Service",
+                "Responses to your support requests and feedback",
+                "Optional marketing communications (only with your consent, which you can withdraw anytime)",
+              ]}
+            />
+          </SubSection>
+
+          <SubSection title="Security and Compliance">
+            <Paragraph>
+              We process information to maintain security and meet legal
+              obligations:
+            </Paragraph>
+            <BulletList
+              items={[
+                "Detecting and preventing fraud, abuse, and unauthorized access",
+                "Monitoring for security threats and vulnerabilities",
+                "Complying with applicable laws, regulations, and legal processes",
+                "Enforcing our Terms of Service and protecting our legal rights",
+              ]}
+            />
+          </SubSection>
+
+          <SubSection title="Research and Improvement">
+            <Paragraph>
+              We use aggregated and anonymized data to improve the Service:
+            </Paragraph>
+            <BulletList
+              items={[
+                "Developing new features and functionality",
+                "Improving our matching algorithm using anonymized patterns",
+                "Analyzing usage trends and service performance",
+                "Conducting internal research and testing",
+              ]}
+            />
+          </SubSection>
+
+          <ImportantNotice variant="info">
+            We do NOT sell your personal information to third parties. We do not
+            use guest data for marketing purposes. Guest data is processed
+            solely to provide the Service on your behalf.
+          </ImportantNotice>
         </Section>
 
         <Section id="guest-data-handling" title="3. Guest Data Handling">
@@ -172,8 +257,10 @@ export default function PrivacyPage() {
         >
           <Paragraph>
             Seatherder uses automated processing to provide intelligent seating
-            arrangements:
+            arrangements. This section explains how our algorithm works, its
+            limitations, and your rights regarding automated processing.
           </Paragraph>
+
           <SubSection title="How Our Algorithm Works">
             <BulletList
               items={[
@@ -181,23 +268,63 @@ export default function PrivacyPage() {
                 "The algorithm considers your configured weights and constraints to optimize table assignments",
                 "Cross-event seating history is used to encourage new connections based on your novelty preference",
                 "Constraint satisfaction (pin, repel, attract) takes priority in all calculations",
+                "Multi-round seating uses repeat avoidance to prevent same tablemates across rounds",
               ]}
             />
           </SubSection>
+
           <SubSection title="Important Limitations">
+            <Paragraph>
+              You should be aware of the following limitations of our automated
+              processing:
+            </Paragraph>
             <BulletList
               items={[
                 "Seating suggestions are algorithmic recommendations, not guarantees of guest compatibility",
-                "The algorithm cannot account for factors not captured in guest data",
-                "You retain full control to override any automated assignments",
+                "The algorithm cannot account for factors not captured in guest data (personal relationships, recent conflicts, etc.)",
+                "Compatibility scores are based on attribute matching, not actual interpersonal dynamics",
+                "The algorithm may produce suboptimal results with incomplete or inaccurate guest data",
                 "No automated decisions are made that produce legal or similarly significant effects",
               ]}
             />
           </SubSection>
+
+          <SubSection title="Your Rights Regarding Automated Processing">
+            <Paragraph>
+              You have the following rights concerning our automated processing:
+            </Paragraph>
+            <BulletList
+              items={[
+                <>
+                  <Strong>Manual Override:</Strong> You can always manually
+                  adjust any seating assignment through the drag-and-drop editor
+                </>,
+                <>
+                  <Strong>Preview Before Commit:</Strong> You can preview
+                  algorithmic suggestions before applying them to your event
+                </>,
+                <>
+                  <Strong>Configure Weights:</Strong> You control how the
+                  algorithm prioritizes different factors through the matching
+                  configuration wizard
+                </>,
+                <>
+                  <Strong>Opt-Out:</Strong> You can choose not to use the
+                  automated seating feature and manually assign all guests
+                </>,
+                <>
+                  <Strong>Challenge Results:</Strong> Contact us if you believe
+                  the algorithm produced incorrect or unfair results
+                </>,
+              ]}
+            />
+          </SubSection>
+
           <ImportantNotice variant="info">
-            You can always manually adjust seating assignments after the
-            algorithm runs. The algorithm is a tool to assist your
-            decision-making, not replace it.
+            The algorithm is a tool to assist your decision-making, not replace
+            it. You retain full control over all final seating assignments, and
+            we encourage you to review and adjust suggestions based on your
+            knowledge of your guests.
           </ImportantNotice>
         </Section>
 
@@ -256,73 +383,200 @@ export default function PrivacyPage() {
 
         <Section id="data-security" title="7. Data Security">
           <Paragraph>
-            We implement industry-standard security measures to protect your
-            data:
+            We implement comprehensive security measures to protect your data
+            across our infrastructure.
           </Paragraph>
-          <BulletList
-            items={[
-              "Encryption of data in transit (TLS/SSL)",
-              "Secure data storage with Convex (SOC 2 compliant)",
-              "Authentication via Clerk with optional multi-factor authentication",
-              "Regular security assessments",
-              "Employee access limitations",
-            ]}
-          />
-          <Paragraph>
-            However, no method of transmission over the Internet is 100% secure.
-            While we strive to protect your data, we cannot guarantee absolute
-            security.
-          </Paragraph>
+
+          <SubSection title="Infrastructure Security">
+            <BulletList
+              items={[
+                "Backend database hosted on Convex with SOC 2 Type II compliance",
+                "Cloud infrastructure with geographic redundancy",
+                "24/7 system monitoring and alerting",
+                "Regular security audits and compliance certifications",
+              ]}
+            />
+          </SubSection>
+
+          <SubSection title="Technical Safeguards">
+            <BulletList
+              items={[
+                "TLS 1.3+ encryption for all data in transit",
+                "AES-256 encryption for data at rest",
+                "Secure password hashing using bcrypt with salt",
+                "Multi-factor authentication available through Clerk",
+                "API rate limiting to prevent abuse",
+                "Automated malware and vulnerability scanning",
+              ]}
+            />
+          </SubSection>
+
+          <SubSection title="Organizational Controls">
+            <BulletList
+              items={[
+                "Role-based access controls limiting data access to authorized personnel",
+                "Employee background checks and security training",
+                "Confidentiality agreements for all team members",
+                "Documented incident response procedures",
+                "Regular penetration testing and security assessments",
+              ]}
+            />
+          </SubSection>
+
+          <SubSection title="Your Responsibilities">
+            <Paragraph>
+              Security is a shared responsibility. You can help protect your
+              account by:
+            </Paragraph>
+            <BulletList
+              items={[
+                "Using a strong, unique password for your account",
+                "Enabling multi-factor authentication when available",
+                "Keeping your login credentials confidential",
+                "Logging out when using shared devices",
+                "Promptly reporting any suspicious activity to security@seatherder.com",
+              ]}
+            />
+          </SubSection>
+
+          <ImportantNotice variant="warning">
+            No method of transmission over the Internet or electronic storage is
+            100% secure. While we strive to protect your data using
+            commercially acceptable means, we cannot guarantee absolute
+            security. You acknowledge that you provide information at your own
+            risk.
+          </ImportantNotice>
         </Section>
 
         <Section id="data-retention" title="8. Data Retention">
           <Paragraph>
             We retain your data for as long as your account is active or as
-            needed to provide the Service:
+            needed to provide the Service. Below are our standard retention
+            periods:
           </Paragraph>
           <DataTable
             headers={["Data Type", "Retention Period"]}
             rows={[
+              [
+                "Account information",
+                "Duration of account plus 90 days after closure",
+              ],
               ["Active events", "Until you delete the event"],
-              ["Deleted events", "Removed within 30 days"],
-              ["Account data", "Until you delete your account"],
-              ["Seating history", "Until you delete your account"],
+              [
+                "Deleted events",
+                "Removed within 30 days of deletion request",
+              ],
+              [
+                "Guest data",
+                "Until event deletion or 30 days after account closure",
+              ],
+              [
+                "Seating history",
+                "Until you delete your account (used for cross-event optimization)",
+              ],
               ["Email logs", "90 days after sending"],
+              ["Support communications", "2 years after resolution"],
+              [
+                "Payment records",
+                "7 years (required for tax and accounting purposes)",
+              ],
+              [
+                "Usage analytics (detailed)",
+                "90 days, then aggregated indefinitely",
+              ],
             ]}
           />
+
+          <SubSection title="Account Deletion">
+            <Paragraph>
+              You can delete your account at any time through your account
+              settings. Upon deletion:
+            </Paragraph>
+            <BulletList
+              items={[
+                "Your account will be deactivated within 24-48 hours",
+                "Personal data will be deleted within 30 days",
+                "Some data may be retained in anonymized form for analytics",
+                "Backup copies may persist for up to 90 days before automatic removal",
+                "Data required for legal compliance may be retained longer as required by law",
+              ]}
+            />
+          </SubSection>
+
           <Paragraph>
-            Some data may be retained longer if required by law or for
-            legitimate business purposes.
+            If you need data deleted sooner for legal or personal reasons,
+            contact us at{" "}
+            <a
+              href="mailto:privacy@seatherder.com"
+              className="text-primary hover:underline"
+            >
+              privacy@seatherder.com
+            </a>{" "}
+            and we will work to accommodate your request where possible.
           </Paragraph>
         </Section>
 
         <Section id="cookies-and-tracking" title="9. Cookies and Tracking">
-          <Paragraph>We use cookies and similar technologies to:</Paragraph>
-          <BulletList
-            items={[
-              "Keep you signed in",
-              "Remember your preferences",
-              "Analyze usage patterns",
-            ]}
-          />
+          <Paragraph>
+            We use cookies and similar tracking technologies to enhance your
+            experience, maintain security, and improve our Service.
+          </Paragraph>
+
           <SubSection title="Types of Cookies We Use">
             <DataTable
-              headers={["Cookie Type", "Purpose"]}
+              headers={["Cookie Type", "Purpose", "Required"]}
               rows={[
                 [
-                  "Essential cookies",
-                  "Required for the Service to function (authentication, security)",
+                  "Essential",
+                  "Authentication, security, session management, CSRF protection",
+                  "Yes",
                 ],
                 [
-                  "Analytics cookies",
-                  "Help us understand how you use the Service",
+                  "Functional",
+                  "Remember preferences, UI state, language settings, theme choices",
+                  "No",
                 ],
-                ["Preference cookies", "Remember your settings and choices"],
+                [
+                  "Analytics",
+                  "Usage statistics, performance metrics, feature adoption tracking",
+                  "No",
+                ],
               ]}
             />
+          </SubSection>
+
+          <SubSection title="Managing Cookies">
             <Paragraph>
-              You can control cookies through your browser settings. Note that
-              disabling cookies may affect the functionality of the Service.
+              You can control cookies through your browser settings:
+            </Paragraph>
+            <BulletList
+              items={[
+                "Most browsers allow you to refuse or delete cookies",
+                "You can set preferences for specific websites",
+                "Private/incognito browsing limits cookie persistence",
+                "Disabling essential cookies may prevent you from using the Service",
+              ]}
+            />
+          </SubSection>
+
+          <SubSection title="Do Not Track">
+            <Paragraph>
+              Some browsers include a &quot;Do Not Track&quot; (DNT) feature
+              that signals to websites that you do not want to be tracked. There
+              is currently no industry standard for how companies should respond
+              to DNT signals. At this time, our Service does not respond to DNT
+              signals. However, you can manage your privacy preferences through
+              cookie settings as described above.
+            </Paragraph>
+          </SubSection>
+
+          <SubSection title="Third-Party Cookies">
+            <Paragraph>
+              Our service providers (Clerk for authentication, Stripe for
+              payments) may set their own cookies. These cookies are governed by
+              their respective privacy policies. We do not control third-party
+              cookies and recommend reviewing their privacy policies for more
+              information.
             </Paragraph>
           </SubSection>
         </Section>
@@ -404,47 +658,142 @@ export default function PrivacyPage() {
           <BulletList
             items={[
               <>
-                <Strong>Right of Access:</Strong> Obtain confirmation of whether
-                we process your personal data and receive a copy
+                <Strong>Right of Access (Article 15):</Strong> Obtain
+                confirmation of whether we process your personal data and
+                receive a copy of that data
               </>,
               <>
-                <Strong>Right to Rectification:</Strong> Have inaccurate
-                personal data corrected without undue delay
+                <Strong>Right to Rectification (Article 16):</Strong> Have
+                inaccurate personal data corrected without undue delay
               </>,
               <>
-                <Strong>Right to Erasure:</Strong> Request deletion of your
-                personal data in certain circumstances
+                <Strong>Right to Erasure (Article 17):</Strong> Request deletion
+                of your personal data (&quot;right to be forgotten&quot;) in
+                certain circumstances
               </>,
               <>
-                <Strong>Right to Restriction:</Strong> Request restriction of
-                processing in certain circumstances
+                <Strong>Right to Restriction (Article 18):</Strong> Request
+                restriction of processing while we verify accuracy or assess
+                your objection
               </>,
               <>
-                <Strong>Right to Data Portability:</Strong> Receive your
-                personal data in a structured, commonly used, machine-readable
-                format
+                <Strong>Right to Data Portability (Article 20):</Strong> Receive
+                your personal data in a structured, commonly used,
+                machine-readable format and transmit it to another controller
               </>,
               <>
-                <Strong>Right to Object:</Strong> Object to processing based on
-                legitimate interests, direct marketing, or research purposes
+                <Strong>Right to Object (Article 21):</Strong> Object to
+                processing based on legitimate interests, direct marketing, or
+                research purposes
               </>,
               <>
-                <Strong>Automated Decision-Making:</Strong> Not be subject to
-                decisions based solely on automated processing that produce
-                legal or similarly significant effects
+                <Strong>Right to Withdraw Consent (Article 7):</Strong> Withdraw
+                consent at any time where processing is based on consent,
+                without affecting prior lawful processing
+              </>,
+              <>
+                <Strong>Automated Decision-Making (Article 22):</Strong> Not be
+                subject to decisions based solely on automated processing that
+                produce legal or similarly significant effects
+              </>,
+            ]}
+          />
+
+          <SubSection title="Supervisory Authorities">
+            <Paragraph>
+              You have the right to lodge a complaint with your local data
+              protection authority (Article 77):
+            </Paragraph>
+            <BulletList
+              items={[
+                <>
+                  <Strong>EEA:</Strong> European Data Protection Board (EDPB) -
+                  edpb.europa.eu - maintains a list of all national supervisory
+                  authorities
+                </>,
+                <>
+                  <Strong>United Kingdom:</Strong> Information
+                  Commissioner&apos;s Office (ICO) - ico.org.uk
+                </>,
+                <>
+                  <Strong>Switzerland:</Strong> Federal Data Protection and
+                  Information Commissioner (FDPIC) - edoeb.admin.ch
+                </>,
+              ]}
+            />
+          </SubSection>
+
+          <Paragraph>
+            To exercise any of these rights, contact us at{" "}
+            <a
+              href="mailto:privacy@seatherder.com"
+              className="text-primary hover:underline"
+            >
+              privacy@seatherder.com
+            </a>
+            . We will respond to your request within one month, which may be
+            extended by two additional months for complex requests.
+          </Paragraph>
+        </Section>
+
+        <Section id="other-jurisdictions" title="13. Other Jurisdictions">
+          <Paragraph>
+            We are committed to complying with privacy laws in the jurisdictions
+            where we operate. In addition to GDPR and CCPA/CPRA, we recognize
+            the following privacy frameworks:
+          </Paragraph>
+          <BulletList
+            items={[
+              <>
+                <Strong>Canada (PIPEDA):</Strong> The Personal Information
+                Protection and Electronic Documents Act provides Canadians with
+                rights to access, correct, and challenge the handling of their
+                personal information. Contact the Office of the Privacy
+                Commissioner of Canada (priv.gc.ca) for complaints.
+              </>,
+              <>
+                <Strong>Brazil (LGPD):</Strong> The Lei Geral de Proteção de
+                Dados provides Brazilian residents with rights similar to GDPR,
+                including access, correction, deletion, and portability. Contact
+                the Autoridade Nacional de Proteção de Dados (ANPD) for
+                complaints.
+              </>,
+              <>
+                <Strong>Australia (Privacy Act):</Strong> The Australian Privacy
+                Principles (APPs) govern how we handle personal information of
+                Australian residents. Contact the Office of the Australian
+                Information Commissioner (OAIC) for complaints.
+              </>,
+              <>
+                <Strong>Japan (APPI):</Strong> The Act on the Protection of
+                Personal Information provides Japanese residents with rights to
+                disclosure, correction, and cessation of use. Contact the
+                Personal Information Protection Commission for complaints.
+              </>,
+              <>
+                <Strong>Singapore (PDPA):</Strong> The Personal Data Protection
+                Act provides Singapore residents with rights to access and
+                correct their personal data. Contact the Personal Data
+                Protection Commission for complaints.
               </>,
             ]}
           />
           <Paragraph>
-            You also have the right to lodge a complaint with your local data
-            protection authority. A list of EEA data protection authorities is
-            available at the European Data Protection Board website.
+            If you are located in a jurisdiction with specific privacy laws not
+            listed above, please contact us at{" "}
+            <a
+              href="mailto:privacy@seatherder.com"
+              className="text-primary hover:underline"
+            >
+              privacy@seatherder.com
+            </a>{" "}
+            and we will work to address your specific requirements.
           </Paragraph>
         </Section>
 
         <Section
           id="international-transfers"
-          title="13. International Transfers"
+          title="14. International Transfers"
         >
           <Paragraph>
             Your data may be transferred to and processed in countries other
@@ -463,7 +812,7 @@ export default function PrivacyPage() {
 
         <Section
           id="security-breach-notification"
-          title="14. Security Breach Notification"
+          title="15. Security Breach Notification"
         >
           <Paragraph>
             In the event of a security breach involving your personal
@@ -480,7 +829,7 @@ export default function PrivacyPage() {
           />
         </Section>
 
-        <Section id="childrens-privacy" title="15. Children's Privacy">
+        <Section id="childrens-privacy" title="16. Children's Privacy">
           <Paragraph>
             The Service is not intended for children under 18 years of age. We
             do not knowingly collect personal information from children. If we
@@ -500,7 +849,7 @@ export default function PrivacyPage() {
 
         <Section
           id="changes-to-this-policy"
-          title="16. Changes to This Policy"
+          title="17. Changes to This Policy"
         >
           <Paragraph>
             We may update this Privacy Policy from time to time. For material
@@ -512,7 +861,7 @@ export default function PrivacyPage() {
           </Paragraph>
         </Section>
 
-        <Section id="dispute-resolution" title="17. Dispute Resolution">
+        <Section id="dispute-resolution" title="18. Dispute Resolution">
           <Paragraph>
             If you have concerns about our privacy practices, we encourage you
             to contact us first to seek resolution:
@@ -542,10 +891,10 @@ export default function PrivacyPage() {
           />
         </Section>
 
-        <Section id="contact-us" title="18. Contact Us">
+        <Section id="contact-us" title="19. Contact Us">
           <Paragraph>
             If you have questions about this Privacy Policy or our data
-            practices, contact us:
+            practices, please contact us through any of the following channels:
           </Paragraph>
           <div className="grid sm:grid-cols-2 gap-4 my-6">
             <ContactCard icon={Mail} title="Privacy Inquiries">
@@ -565,6 +914,43 @@ export default function PrivacyPage() {
               </a>
             </ContactCard>
           </div>
+          <SubSection title="Additional Contact Methods">
+            <BulletList
+              items={[
+                <>
+                  <Strong>General Support:</Strong>{" "}
+                  <a
+                    href="mailto:support@seatherder.com"
+                    className="text-primary hover:underline"
+                  >
+                    support@seatherder.com
+                  </a>
+                </>,
+                <>
+                  <Strong>Legal Inquiries:</Strong>{" "}
+                  <a
+                    href="mailto:legal@seatherder.com"
+                    className="text-primary hover:underline"
+                  >
+                    legal@seatherder.com
+                  </a>
+                </>,
+              ]}
+            />
+          </SubSection>
+          <SubSection title="Response Times">
+            <Paragraph>
+              We strive to respond to all inquiries within the following
+              timeframes:
+            </Paragraph>
+            <BulletList
+              items={[
+                "Privacy requests: Acknowledgment within 5-10 business days, substantive response within 30-45 days",
+                "Security issues: Acknowledgment within 24 hours for potential vulnerabilities",
+                "General support: Response within 2-3 business days",
+              ]}
+            />
+          </SubSection>
         </Section>
 
         <Divider />
