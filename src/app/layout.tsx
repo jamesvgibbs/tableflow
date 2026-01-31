@@ -31,6 +31,11 @@ const interTight = Inter_Tight({
 export const metadata: Metadata = {
   title: "Seatherder - Event Seating Made Simple",
   description: "Create randomized table assignments for events with QR codes for easy guest lookup. Import guests, assign tables, and generate printable seating cards.",
+  manifest: "/site.webmanifest",
+  icons: {
+    icon: "/favicon.ico",
+    apple: "/apple-icon.png",
+  },
 };
 
 export default function RootLayout({
