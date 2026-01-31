@@ -53,6 +53,37 @@ async function verifyEventOwnership(
   }
 }
 
+/**
+ * Validate that an event is not locked for editing.
+ * Settings lock when EITHER:
+ * 1. First guest checks in (any guest has checkedIn === true)
+ * 2. Live timer starts (event has roundStartedAt !== undefined)
+ */
+async function validateEventNotLocked(
+  ctx: MutationCtx,
+  eventId: Id<"events">
+): Promise<void> {
+  const event = await ctx.db.get(eventId)
+  if (!event) {
+    throw new Error("Event not found")
+  }
+
+  // Check if timer has started
+  if (event.roundStartedAt) {
+    throw new Error("I cannot change this now. The event timer has started.")
+  }
+
+  // Check if any guest has checked in
+  const guests = await ctx.db
+    .query("guests")
+    .withIndex("by_event", (q) => q.eq("eventId", eventId))
+    .collect()
+
+  if (guests.some((g) => g.checkedIn)) {
+    throw new Error("I cannot change this now. Guests have already checked in.")
+  }
+}
+
 // List all events for the current user (sorted by createdAt descending)
 export const list = query({
   args: {},
@@ -181,7 +212,7 @@ export const updateName = mutation({
   },
 })
 
-// Update table size (with ownership check)
+// Update table size (with ownership check and lock validation)
 export const updateTableSize = mutation({
   args: {
     id: v.id("events"),
@@ -190,11 +221,40 @@ export const updateTableSize = mutation({
   handler: async (ctx, args) => {
     const userId = await getAuthenticatedUserId(ctx)
     await verifyEventOwnership(ctx, args.id, userId)
+    await validateEventNotLocked(ctx, args.id)
     await ctx.db.patch(args.id, { tableSize: args.tableSize })
   },
 })
 
-// Update round duration (with ownership check)
+// Get edit lock status for an event (to check if settings can be modified)
+export const getEditLockStatus = query({
+  args: { eventId: v.id("events") },
+  handler: async (ctx, args) => {
+    const event = await ctx.db.get(args.eventId)
+    if (!event) {
+      return { isLocked: true, lockReason: "not_found" as const, checkedInCount: 0 }
+    }
+
+    const guests = await ctx.db
+      .query("guests")
+      .withIndex("by_event", (q) => q.eq("eventId", args.eventId))
+      .collect()
+
+    const checkedInCount = guests.filter((g) => g.checkedIn).length
+    const hasTimerStarted = event.roundStartedAt !== undefined
+
+    if (checkedInCount > 0) {
+      return { isLocked: true, lockReason: "guest_checked_in" as const, checkedInCount }
+    }
+    if (hasTimerStarted) {
+      return { isLocked: true, lockReason: "timer_started" as const, checkedInCount: 0 }
+    }
+
+    return { isLocked: false, lockReason: "none" as const, checkedInCount: 0 }
+  },
+})
+
+// Update round duration (with ownership check and lock validation)
 export const updateRoundDuration = mutation({
   args: {
     id: v.id("events"),
@@ -203,12 +263,13 @@ export const updateRoundDuration = mutation({
   handler: async (ctx, args) => {
     const userId = await getAuthenticatedUserId(ctx)
     await verifyEventOwnership(ctx, args.id, userId)
+    await validateEventNotLocked(ctx, args.id)
     const duration = args.roundDuration > 0 ? args.roundDuration : undefined
     await ctx.db.patch(args.id, { roundDuration: duration })
   },
 })
 
-// Update number of rounds (with ownership check, handles regenerating assignments if event is assigned)
+// Update number of rounds (with ownership check, lock validation, handles regenerating assignments if event is assigned)
 export const updateNumberOfRounds = mutation({
   args: {
     id: v.id("events"),
@@ -217,6 +278,7 @@ export const updateNumberOfRounds = mutation({
   handler: async (ctx, args) => {
     const userId = await getAuthenticatedUserId(ctx)
     await verifyEventOwnership(ctx, args.id, userId)
+    await validateEventNotLocked(ctx, args.id)
 
     const event = await ctx.db.get(args.id)
     if (!event) throw new Error("Event not found")
@@ -410,7 +472,7 @@ export const updateNumberOfRounds = mutation({
   },
 })
 
-// Update round settings (with ownership check) - legacy, use specific mutations instead
+// Update round settings (with ownership check and lock validation) - legacy, use specific mutations instead
 export const updateRoundSettings = mutation({
   args: {
     id: v.id("events"),
@@ -420,6 +482,7 @@ export const updateRoundSettings = mutation({
   handler: async (ctx, args) => {
     const userId = await getAuthenticatedUserId(ctx)
     await verifyEventOwnership(ctx, args.id, userId)
+    await validateEventNotLocked(ctx, args.id)
 
     const updates: { numberOfRounds?: number; roundDuration?: number } = {}
     if (args.numberOfRounds !== undefined) {
