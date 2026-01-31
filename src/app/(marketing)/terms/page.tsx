@@ -56,16 +56,21 @@ export default function TermsPage() {
           items={[
             "Agreement to Terms",
             "Description of Service",
-            "User Accounts",
-            "Acceptable Use",
+            "User Eligibility and Accounts",
+            "User Responsibilities and Conduct",
             "Guest Data and Privacy",
-            "Subscription and Payments",
+            "Subscription, Payment, and Billing",
             "Intellectual Property",
+            "User-Generated Content",
             "Disclaimer of Warranties",
             "Limitation of Liability",
             "Indemnification",
-            "Changes to Terms",
+            "Arbitration and Dispute Resolution",
+            "Class Action Waiver",
+            "Governing Law",
             "Termination",
+            "Modifications to Service",
+            "Changes to Terms",
             "Contact",
           ]}
         />
@@ -75,13 +80,19 @@ export default function TermsPage() {
         <Section id="agreement-to-terms" title="1. Agreement to Terms">
           <Paragraph>
             By accessing or using Seatherder (&quot;the Service&quot;), you
-            agree to be bound by these Terms of Service. These Terms constitute
-            a legally binding agreement between you and Seatherder.
+            agree to be bound by these Terms of Service (&quot;Terms&quot;).
+            These Terms constitute a legally binding agreement between you and
+            Seatherder (&quot;we,&quot; &quot;us,&quot; or &quot;our&quot;).
           </Paragraph>
           <Paragraph>
-            We may update these Terms from time to time. Continued use of the
-            Service after changes take effect constitutes acceptance of the new
-            terms.
+            We reserve the right to modify these Terms at any time. Changes take
+            effect immediately upon posting. Your continued use of the Service
+            after any modifications constitutes acceptance of the updated Terms.
+          </Paragraph>
+          <Paragraph>
+            Additional terms may apply to specific features or services. Such
+            additional terms will be presented to you when you access those
+            features and are incorporated into these Terms by reference.
           </Paragraph>
         </Section>
 
@@ -89,8 +100,10 @@ export default function TermsPage() {
           <Paragraph>
             Seatherder is an event seating management platform that helps
             organizers create intelligent seating arrangements for their events.
-            The Service includes features such as:
+            The Service is provided solely as an organizational tool and does
+            not guarantee specific outcomes for your events.
           </Paragraph>
+          <Paragraph>The Service includes features such as:</Paragraph>
           <BulletList
             items={[
               "Guest list management and CSV import",
@@ -104,6 +117,13 @@ export default function TermsPage() {
               "Event theming with preset and custom colors",
             ]}
           />
+          <ImportantNotice variant="info">
+            The Service is an organizational tool only. We do not provide event
+            planning advice, guarantee guest satisfaction, or ensure that
+            seating arrangements will meet your specific expectations. You are
+            solely responsible for reviewing and approving all seating
+            assignments before your event.
+          </ImportantNotice>
         </Section>
 
         <Section id="user-accounts" title="3. User Accounts">
