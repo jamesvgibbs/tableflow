@@ -21,7 +21,7 @@ interface EventTabsProps {
 
 const tabs = [
   { label: "Hub", href: "", icon: Home },
-  { label: "How to Seat", href: "/matching", icon: Sparkles },
+  { label: "How to Seat", href: "/seating", icon: Sparkles },
   { label: "Seating", href: "/seating-editor", icon: MousePointer2 },
   { label: "Live", href: "/live", icon: Play },
   { label: "Emails", href: "/emails", icon: Mail },
@@ -43,8 +43,12 @@ export function EventTabs({ eventId }: EventTabsProps) {
       return pathname === basePath
     }
 
-    // For other tabs, check if pathname starts with the tab path
-    return pathname.startsWith(fullPath)
+    // For other tabs, require exact match or a path segment boundary (/)
+    // This prevents /seating from matching /seating-editor
+    return (
+      pathname === fullPath ||
+      pathname.startsWith(fullPath + "/")
+    )
   }
 
   return (
