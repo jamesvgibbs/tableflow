@@ -1,3 +1,5 @@
+import { useId } from "react";
+
 import { cn } from "@/lib/utils";
 
 export function Paragraph({
@@ -55,10 +57,14 @@ export function SubSection({
 }
 
 export function BulletList({ items }: { items: React.ReactNode[] }) {
+  const id = useId();
   return (
     <ul className="space-y-2 mb-4 ml-4">
       {items.map((item, index) => (
-        <li key={index} className="flex items-start gap-3 text-muted-foreground">
+        <li
+          key={`${id}-${index}`}
+          className="flex items-start gap-3 text-muted-foreground"
+        >
           <span className="w-1.5 h-1.5 rounded-full bg-primary mt-2 shrink-0" />
           <span>{item}</span>
         </li>
@@ -68,10 +74,14 @@ export function BulletList({ items }: { items: React.ReactNode[] }) {
 }
 
 export function NumberedList({ items }: { items: React.ReactNode[] }) {
+  const id = useId();
   return (
     <ol className="space-y-2 mb-4 ml-4">
       {items.map((item, index) => (
-        <li key={index} className="flex items-start gap-3 text-muted-foreground">
+        <li
+          key={`${id}-${index}`}
+          className="flex items-start gap-3 text-muted-foreground"
+        >
           <span className="w-6 h-6 rounded-full bg-primary/10 text-primary text-sm font-semibold flex items-center justify-center shrink-0">
             {index + 1}
           </span>
@@ -110,14 +120,15 @@ export function DataTable({
   headers: string[];
   rows: string[][];
 }) {
+  const id = useId();
   return (
     <div className="overflow-x-auto mb-6">
       <table className="w-full border-collapse">
         <thead>
           <tr>
-            {headers.map((header, index) => (
+            {headers.map((header) => (
               <th
-                key={index}
+                key={header}
                 className="text-left p-3 bg-secondary/50 font-semibold text-foreground text-sm border-b border-primary/10"
               >
                 {header}
@@ -127,10 +138,10 @@ export function DataTable({
         </thead>
         <tbody>
           {rows.map((row, rowIndex) => (
-            <tr key={rowIndex} className="border-b border-primary/5">
+            <tr key={`${id}-row-${rowIndex}`} className="border-b border-primary/5">
               {row.map((cell, cellIndex) => (
                 <td
-                  key={cellIndex}
+                  key={`${id}-cell-${rowIndex}-${cellIndex}`}
                   className="p-3 text-muted-foreground text-sm"
                 >
                   {cell}
