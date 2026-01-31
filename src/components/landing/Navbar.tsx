@@ -1,9 +1,9 @@
-'use client'
+"use client";
 
-import { motion } from "framer-motion"
-import Link from "next/link"
-import { Button } from "@/components/ui/button"
-import { Sparkles } from "lucide-react"
+import { motion } from "framer-motion";
+import { Sparkles } from "lucide-react";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
 
 export const Navbar = () => {
   return (
@@ -39,9 +39,9 @@ export const Navbar = () => {
                 className="text-sm font-bold text-muted-foreground hover:text-primary transition-colors relative"
                 whileHover={{ y: -2 }}
                 onClick={(e) => {
-                  e.preventDefault()
-                  const element = document.querySelector(link.href)
-                  element?.scrollIntoView({ behavior: 'smooth' })
+                  e.preventDefault();
+                  const element = document.querySelector(link.href);
+                  element?.scrollIntoView({ behavior: "smooth" });
                 }}
               >
                 {link.label}
@@ -60,7 +60,11 @@ export const Navbar = () => {
 
           <div className="flex items-center gap-3">
             {/* Check In link - visible on mobile for guests */}
-            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="md:hidden">
+            <motion.div
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              className="md:hidden"
+            >
               <Button variant="outline" size="sm" className="font-bold" asChild>
                 <Link href="/checkin">
                   Check In
@@ -71,7 +75,7 @@ export const Navbar = () => {
 
             <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
               <Button variant="default" size="sm" className="font-bold" asChild>
-                <Link href="/login">
+                <Link href="/sign-in">
                   <Sparkles className="w-4 h-4" />
                   Get Started
                   <span>🐾</span>
@@ -82,5 +86,5 @@ export const Navbar = () => {
         </div>
       </div>
     </motion.nav>
-  )
-}
+  );
+};

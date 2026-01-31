@@ -57,7 +57,7 @@ export const updateProfile = mutation({
 export default async function AuthLayout({ children }) {
   const session = await getServerSession();
   if (!session) {
-    redirect("/login");
+    redirect("/sign-in");
   }
   return <>{children}</>;
 }

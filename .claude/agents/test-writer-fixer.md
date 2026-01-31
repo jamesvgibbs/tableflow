@@ -75,7 +75,7 @@ describe("Profile Settings", () => {
     cy.get('[data-testid="success-toast"]').should("be.visible");
     cy.get('[data-testid="first-name-input"]').should(
       "have.value",
-      "Updated Name"
+      "Updated Name",
     );
   });
 
@@ -154,9 +154,9 @@ cy.findByRole("textbox", { name: "Email" });
 // cypress/support/commands.ts
 
 // Login command
-Cypress.Commands.add("login", (email?: string) => {
+Cypress.Commands.add("sign-in", (email?: string) => {
   cy.session(email ?? "test@example.com", () => {
-    cy.visit("/login");
+    cy.visit("/sign-in");
     cy.get('[data-testid="email-input"]').type(email ?? "test@example.com");
     cy.get('[data-testid="submit-button"]').click();
     // Handle OTP flow...
