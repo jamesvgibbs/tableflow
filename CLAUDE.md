@@ -11,10 +11,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - QR code check-in (guest and table)
 - Real-time round timer with pause/resume
 - Event theming with 8 presets + custom colors
-- Email campaigns (invitations, confirmations)
+- Email campaigns (invitations, confirmations) with rate-limited queue
 - Seating constraints (pin, repel, attract)
 - Drag-and-drop seating editor with canvas pan/zoom
 - Custom terminology per event type
+- Breakout rooms and sessions management
+- Guest self-service portal for RSVP and dietary updates
+- Cross-event seating history for novelty preference
 
 ## Development Commands
 
@@ -34,6 +37,7 @@ Next.js 16 App Router with React 19, using Convex as the serverless backend.
 ### Tech Stack
 - **Framework**: Next.js 16 with App Router (React Server Components)
 - **Backend**: Convex 1.31+ (real-time database, serverless functions)
+- **Authentication**: Clerk (with Convex integration via `ConvexProviderWithClerk`)
 - **Styling**: Tailwind CSS v4 with CSS variables (OKLCH color space)
 - **UI Components**: shadcn/ui (new-york style) with Radix UI primitives
 - **Icons**: Lucide React
@@ -53,55 +57,76 @@ src/
 │   │   │   ├── seating-editor/ # Visual drag-and-drop editor
 │   │   │   ├── live/           # Real-time event mode with timer
 │   │   │   ├── matching/       # Seating configuration wizard
-│   │   │   └── emails/         # Email campaign management
+│   │   │   ├── emails/         # Email campaign management
+│   │   │   ├── rooms/          # Breakout rooms management
+│   │   │   └── sessions/       # Sessions/workshops management
 │   │   ├── checkin/            # Guest name search check-in
 │   │   ├── scan/[qrCodeId]/    # QR code scanner (guest or table)
-│   │   ├── timer/[eventId]/    # Full-screen round timer
-│   │   └── login/              # Admin login
+│   │   └── timer/[eventId]/    # Full-screen round timer
 │   ├── (marketing)/            # Public landing page
-│   └── api/auth/               # Auth API routes
+│   │   ├── privacy/            # Privacy policy
+│   │   └── terms/              # Terms of service
+│   ├── (public)/               # Public routes (no auth required)
+│   │   └── guest/[token]/      # Guest self-service portal
+│   ├── sign-in/[[...sign-in]]/ # Clerk sign-in
+│   └── sign-up/[[...sign-up]]/ # Clerk sign-up
 ├── components/
 │   ├── ui/                     # shadcn/ui components (24+)
-│   └── landing/                # Marketing page sections (12)
-│   # Feature components at root: GuestForm, CsvUpload, ThemeCustomizer, etc.
+│   ├── landing/                # Marketing page sections
+│   └── *.tsx                   # Feature components (GuestForm, CsvUpload, etc.)
 ├── lib/
 │   ├── utils.ts                # cn() helper, getDepartmentColors()
 │   ├── types.ts                # Shared TypeScript types
 │   ├── terminology.ts          # Custom label helpers
 │   ├── theme-presets.ts        # 8 theme definitions
+│   ├── theme-utils.ts          # Theme color utilities
 │   ├── config-mapper.ts        # Wizard answers → matching weights
-│   └── auth.ts                 # Auth utilities (dev only)
-└── providers/                  # Context providers (Auth, Convex, Theme)
+│   ├── event-types.ts          # Event type definitions
+│   ├── seating-types.ts        # Seating type definitions
+│   ├── qr-download.ts          # QR code export utilities
+│   ├── storage.ts              # Browser storage helpers
+│   └── sample-data.ts          # Demo/sample data
+└── providers/                  # Context providers (Convex with Clerk)
 
 convex/
-├── schema.ts                   # Database schema (11 tables)
-├── events.ts                   # Event queries/mutations (~700 lines)
-├── guests.ts                   # Guest queries/mutations (~330 lines)
+├── schema.ts                   # Database schema (16 tables)
+├── auth.config.ts              # Clerk JWT configuration
+├── events.ts                   # Event queries/mutations
+├── guests.ts                   # Guest queries/mutations
 ├── tables.ts                   # Table queries
 ├── matching.ts                 # Compatibility scoring algorithm
 ├── matchingConfig.ts           # Per-event algorithm config
 ├── constraints.ts              # Pin/repel/attract constraints
 ├── preview.ts                  # Preview assignments system
 ├── email.ts                    # Email sending actions
+├── emailQueue.ts               # Rate-limited email queue processor
 ├── attachments.ts              # File storage for emails
+├── rooms.ts                    # Breakout rooms CRUD
+├── sessions.ts                 # Sessions/workshops CRUD
+├── seatingHistory.ts           # Cross-event seating history
+├── themes.ts                   # Theme management
 └── http.ts                     # HTTP helpers
 ```
 
 ### Path Aliases
 - `@/*` maps to `./src/*`
+- `@convex/*` maps to `./convex/*`
 
 ## Convex Backend
 
 ### Schema (convex/schema.ts)
 
-**11 tables with 21 indexes:**
+**16 tables:**
 
 **events** - Event configuration
 - Core: `name`, `tableSize`, `createdAt`, `isAssigned`
+- Owner: `userId` (Clerk user ID)
 - Multi-round: `numberOfRounds`, `roundDuration`, `currentRound`, `roundStartedAt`, `isPaused`, `pausedTimeRemaining`
 - Theme: `themePreset`, `customColors` (6 OKLCH colors)
 - Email: `emailSettings` (sender name, reply-to, custom subjects)
 - Terminology: `eventType`, `eventTypeSettings` (custom labels)
+- Self-service: `selfServiceDeadline`, `selfServiceNotificationsEnabled`
+- Index: `by_user`
 
 **guests** - Event attendees (rich attributes)
 - Core: `eventId`, `name`, `department`, `email`, `phone`
@@ -110,7 +135,9 @@ convex/
 - Matching: `attributes.interests[]`, `attributes.jobLevel`, `attributes.goals[]`, `attributes.customTags[]`
 - Event-specific: `familyName`, `side` (wedding), `company`, `team`, `managementLevel`, `isVip`
 - Email tracking: `invitationSentAt`, `confirmationSentAt`, `emailUnsubscribed`
-- Indexes: `by_event`, `by_qrCodeId`, `by_name`
+- Self-service: `selfServiceToken`, `rsvpStatus` (confirmed|declined|pending), `lastSelfServiceUpdate`
+- Event day: `status` (present|no-show|late)
+- Indexes: `by_event`, `by_qrCodeId`, `by_name`, `by_selfServiceToken`
 
 **tables** - Physical tables
 - `eventId`, `tableNumber`, `qrCodeId`
@@ -124,6 +151,7 @@ convex/
 - `eventId`, `seatingType` (wedding|corporate|networking|team|social|custom)
 - `answers` (wizard Q&A stored as JSON)
 - `weights` (5 numeric: departmentMix, interestAffinity, jobLevelDiversity, goalCompatibility, repeatAvoidance)
+- `noveltyPreference` (0-1, cross-event novelty preference)
 - `vipTables[]`, `interestOptions[]`, `goalOptions[]`
 - Index: `by_event`
 
@@ -138,12 +166,38 @@ convex/
 - Indexes: `by_session`, `by_event`
 
 **emailLogs** - Delivery tracking
-- `eventId`, `guestId`, `type`, `status`, `resendId`, `sentAt`, `deliveredAt`, `errorMessage`
+- `eventId`, `guestId`, `type`, `status`, `resendId`, `sentAt`, `deliveredAt`, `errorMessage`, `recipientEmail`
 - Indexes: `by_event`, `by_guest`, `by_resend_id`, `by_status`
 
 **emailAttachments** - File storage
-- `eventId`, `guestId`, `filename`, `storageId`, `contentType`, `size`
-- Indexes: `by_event`, `by_guest`
+- `eventId`, `guestId`, `filename`, `storageId`, `contentType`, `size`, `uploadedAt`
+- Indexes: `by_event`, `by_guest`, `by_event_guest`
+
+**emailQueue** - Rate-limited email sending
+- `eventId`, `guestId`, `type`, `priority`, `status`, `attempts`, `maxAttempts`, `nextAttemptAt`
+- `templateData`, `errorMessage`, `resendId`, `createdAt`, `processedAt`
+- Indexes: `by_status_priority`, `by_event`, `by_guest`
+
+**emailQueueStatus** - Singleton for processor state
+- `isProcessing`, `lastProcessedAt`
+
+**rooms** - Physical breakout rooms
+- `eventId`, `name`, `capacity`, `location`, `description`
+- Index: `by_event`
+
+**sessions** - Sessions/workshops within an event
+- `eventId`, `name`, `description`, `startTime`, `endTime`
+- `roomId`, `hasTableSeating`, `maxCapacity`
+- Indexes: `by_event`, `by_room`
+
+**sessionAssignments** - Guest-session assignments
+- `sessionId`, `guestId`, `eventId`, `createdAt`
+- Indexes: `by_session`, `by_guest`, `by_event`
+
+**seatingHistory** - Cross-event memory
+- `organizerId` (Clerk user ID), `guestEmail`, `partnerEmail`
+- `eventId`, `roundNumber`, `timestamp`
+- Indexes: `by_organizer_guest`, `by_organizer_pair`, `by_event`
 
 ### Key Convex Functions
 
@@ -158,9 +212,11 @@ convex/
 
 **guests.ts** - Guest management
 - `getByEvent()`, `getByQrCodeId()`, `getRoundAssignments()`
+- `getBySelfServiceToken()` - Guest self-service portal
 - `searchByName()` - Cross-event name search for check-in
 - `create()`, `createMany()`, `update()`, `remove()`
 - `checkIn()`, `uncheckIn()` - Triggers confirmation email
+- `updateSelfService()` - Guest self-service updates
 
 **preview.ts** - Preview system
 - `generatePreview()` - Create temporary assignments
@@ -179,10 +235,25 @@ convex/
 - `DEFAULT_WEIGHTS` constant
 - Goal compatibility matrix, job level distance calculation
 
+**rooms.ts** - Breakout rooms
+- `getByEvent()`, `create()`, `update()`, `remove()`
+
+**sessions.ts** - Sessions/workshops
+- `getByEvent()`, `create()`, `update()`, `remove()`
+- `assignGuest()`, `unassignGuest()`, `getAssignments()`
+
+**seatingHistory.ts** - Cross-event memory
+- `recordSeating()` - Save who sat together
+- `getHistory()` - Get seating history for novelty calculation
+
 **email.ts** - Email campaigns
 - `sendCheckInConfirmation()` - Triggered on check-in
 - `sendInvitations()`, `sendReminders()` - Bulk campaigns
 - Template placeholders: `{{guest_name}}`, `{{event_name}}`, `{{table_number}}`
+
+**emailQueue.ts** - Rate-limited sending
+- `enqueue()` - Add email to queue
+- `processQueue()` - Process pending emails (2/second rate limit)
 
 ## Advanced Features
 
@@ -214,6 +285,7 @@ Scoring system (lower = better):
 4. Job level diversity
 5. Goal compatibility (matrix-based)
 6. Repeat avoidance (tablemate history)
+7. Cross-event novelty (seating history)
 
 ### Event Types & Wizard
 6 types: wedding, corporate, networking, team, social, custom
@@ -228,6 +300,27 @@ const guestLabel = getGuestLabel(event)           // "Guest" or "Attendee"
 const tableLabel = getTableLabel(event)           // "Table" or "Pod"
 const countLabel = getCountLabel(event, 5, "guest") // "5 Guests"
 ```
+
+### Guest Self-Service Portal
+Token-based portal for guests to update their info:
+- Access via `/guest/[token]/` (public route)
+- Editable: phone, dietary restrictions, RSVP status
+- Read-only: name, email (contact organizer to change)
+- Configurable deadline via `selfServiceDeadline`
+- RSVP tracking: confirmed, declined, pending
+
+### Breakout Rooms & Sessions
+Multi-track event support:
+- **Rooms**: Physical locations with capacity
+- **Sessions**: Workshops/talks with time slots, room assignment
+- **Session Assignments**: Which guests attend which sessions
+- Sessions can optionally use table seating
+
+### Cross-Event Seating History
+Tracks who sat together across events for novelty preference:
+- Uses email as identifier (persists across re-imports)
+- `noveltyPreference` (0-1): 0 = ignore history, 1 = strongly prefer new connections
+- Scoped to organizer (Clerk user ID)
 
 ## Styling & Theming
 
@@ -301,18 +394,25 @@ import { EventThemeProvider } from "@/components/event-theme-provider"
 // Applies customColors as CSS variables to document
 ```
 
-## Authentication (Development Only)
+## Authentication
 
-**WARNING**: Current auth is hardcoded for development.
-- Username: `admin`, Password: `seatherder123`
-- Cookie: `seatherder_session` (HTTP-only)
-- Protected routes use `ProtectedRoute` wrapper
+**Clerk Authentication** is fully integrated:
+- Sign-in: `/sign-in` (Clerk hosted UI)
+- Sign-up: `/sign-up` (Clerk hosted UI)
+- Protected routes use `ProtectedRoute` wrapper with `useAuth()` hook
+- Middleware handles unauthenticated redirects
+- Convex integration via `ConvexProviderWithClerk` and `auth.config.ts`
 
-**Production requires:**
-1. Clerk or similar auth provider (Convex has first-party support)
-2. Environment variables for secrets
-3. Proper session management
-4. Row-level security in Convex functions
+**Environment Variables Required:**
+- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
+- `CLERK_SECRET_KEY`
+- `CLERK_ISSUER_URL` (for Convex JWT verification)
+- `NEXT_PUBLIC_CONVEX_URL`
+
+**Convex Auth Setup:**
+1. Clerk JWT template configured with `aud: "convex"`
+2. `auth.config.ts` specifies Clerk as identity provider
+3. Events are scoped to `userId` (Clerk user ID)
 
 ## App Routes
 
@@ -326,18 +426,22 @@ import { EventThemeProvider } from "@/components/event-theme-provider"
 | `/event/[id]/live` | Real-time mode with timer | Protected |
 | `/event/[id]/matching` | Seating config wizard | Protected |
 | `/event/[id]/emails` | Email campaigns | Protected |
+| `/event/[id]/rooms` | Breakout rooms management | Protected |
+| `/event/[id]/sessions` | Sessions/workshops | Protected |
+| `/event/[id]/sessions/[sessionId]` | Session attendees | Protected |
 | `/checkin` | Guest name search | Public |
 | `/scan/[qrCodeId]` | QR lookup (guest/table) | Public |
 | `/timer/[eventId]` | Full-screen round timer | Public |
-| `/login` | Admin authentication | Public |
+| `/guest/[token]` | Guest self-service portal | Public |
+| `/sign-in` | Clerk authentication | Public |
+| `/sign-up` | Clerk registration | Public |
+| `/privacy` | Privacy policy | Public |
+| `/terms` | Terms of service | Public |
 
-## Multi-Tenant Considerations
+## Multi-Tenant Architecture
 
-Current: Single-tenant with shared admin access.
-
-For multi-tenant:
-1. Add organization/user tables to Convex schema
-2. Integrate Clerk for auth
-3. Add `organizationId` to events table
-4. Implement row-level security in Convex functions
-5. Update all queries to filter by authenticated user's org
+Events are scoped to users via `userId` (Clerk user ID):
+- Events table has `by_user` index
+- Queries filter by authenticated user
+- Seating history scoped to `organizerId`
+- Row-level security enforced in Convex functions
