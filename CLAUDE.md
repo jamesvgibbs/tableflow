@@ -68,8 +68,14 @@ src/
 │   │   └── terms/              # Terms of service
 │   ├── (public)/               # Public routes (no auth required)
 │   │   └── guest/[token]/      # Guest self-service portal
+│   ├── (fullscreen)/           # Fullscreen layouts (no nav)
+│   ├── checkout/
+│   │   └── success/            # Stripe checkout success page
 │   ├── sign-in/[[...sign-in]]/ # Clerk sign-in
-│   └── sign-up/[[...sign-up]]/ # Clerk sign-up
+│   ├── sign-up/[[...sign-up]]/ # Clerk sign-up
+│   ├── robots.ts               # SEO robots.txt
+│   ├── sitemap.ts              # SEO sitemap.xml
+│   └── opengraph-image.tsx     # Dynamic OG image
 ├── components/
 │   ├── ui/                     # shadcn/ui components (24+)
 │   ├── landing/                # Marketing page sections
@@ -89,7 +95,7 @@ src/
 └── providers/                  # Context providers (Convex with Clerk)
 
 convex/
-├── schema.ts                   # Database schema (16 tables)
+├── schema.ts                   # Database schema (17 tables)
 ├── auth.config.ts              # Clerk JWT configuration
 ├── events.ts                   # Event queries/mutations
 ├── guests.ts                   # Guest queries/mutations
@@ -105,9 +111,11 @@ convex/
 ├── sessions.ts                 # Sessions/workshops CRUD
 ├── seatingHistory.ts           # Cross-event seating history
 ├── themes.ts                   # Theme management
-├── http.ts                     # HTTP helpers
+├── purchases.ts                # Credit/purchase management
+├── stripe.ts                   # Stripe checkout integration
+├── http.ts                     # HTTP routes + Stripe webhook
 └── lib/
-    └── tierLimits.ts           # Free tier limits and feature gating
+    └── tierLimits.ts           # Legacy tier limits for free events
 ```
 
 ### Path Aliases
@@ -118,7 +126,7 @@ convex/
 
 ### Schema (convex/schema.ts)
 
-**16 tables:**
+**17 tables:**
 
 **events** - Event configuration
 - Core: `name`, `tableSize`, `createdAt`, `isAssigned`
@@ -202,6 +210,13 @@ convex/
 - `eventId`, `roundNumber`, `timestamp`
 - Indexes: `by_organizer_guest`, `by_organizer_pair`, `by_event`
 
+**purchases** - Payment/credit tracking
+- `userId` (Clerk user ID), `productType` (single|bundle_3|annual)
+- `stripeCheckoutSessionId`, `stripeCustomerId`, `stripePaymentIntentId`
+- `eventCredits` (number of events, -1 for unlimited)
+- `eventsUsed`, `amount`, `currency`, `status`, `expiresAt`
+- Indexes: `by_user`, `by_status`, `by_stripe_session`
+
 ### Key Convex Functions
 
 **events.ts** - Event management
@@ -257,6 +272,19 @@ convex/
 **emailQueue.ts** - Rate-limited sending
 - `enqueue()` - Add email to queue
 - `processQueue()` - Process pending emails (2/second rate limit)
+
+**purchases.ts** - Credit management
+- `canCreateEvent()` - Check if user has credits
+- `getCredits()` - Get user's available credits
+- `getPurchaseHistory()` - Get all user purchases
+- `recordPurchase()` - Internal: record payment from webhook
+- `useCredit()` - Internal: decrement credit on event creation
+
+**stripe.ts** - Payment integration
+- `createCheckoutSession()` - Create Stripe checkout for product
+
+**http.ts** - HTTP routes
+- `POST /stripe-webhook` - Handle Stripe payment events
 
 ## Advanced Features
 
@@ -411,6 +439,9 @@ import { EventThemeProvider } from "@/components/event-theme-provider"
 - `CLERK_SECRET_KEY`
 - `CLERK_ISSUER_URL` (for Convex JWT verification)
 - `NEXT_PUBLIC_CONVEX_URL`
+- `STRIPE_SECRET_KEY` (Convex env var for payments)
+- `STRIPE_WEBHOOK_SECRET` (Convex env var for webhook verification)
+- `NEXT_PUBLIC_APP_URL` (for Stripe redirect URLs)
 
 **Convex Auth Setup:**
 1. Clerk JWT template configured with `aud: "convex"`
@@ -438,6 +469,7 @@ import { EventThemeProvider } from "@/components/event-theme-provider"
 | `/guest/[token]` | Guest self-service portal | Public |
 | `/sign-in` | Clerk authentication | Public |
 | `/sign-up` | Clerk registration | Public |
+| `/checkout/success` | Stripe payment success | Protected |
 | `/privacy` | Privacy policy | Public |
 | `/terms` | Terms of service | Public |
 
@@ -449,9 +481,36 @@ Events are scoped to users via `userId` (Clerk user ID):
 - Seating history scoped to `organizerId`
 - Row-level security enforced in Convex functions
 
-## Free Tier System
+## Payment System
 
-Free events allow users to experience core value (seating algorithm, QR check-in) while limiting high-cost features (email, storage).
+All events require purchasing credits. No free trial - Stripe promotion codes handle discounts.
+
+### Pricing
+- **Single Event**: $49 (1 credit)
+- **3-Event Bundle**: $129 (3 credits, $43/event)
+- **Annual Unlimited**: $249/year (unlimited events)
+
+### Credit Flow
+```
+Sign Up → /admin → "Buy Your First Event" → Stripe Checkout → Create Event
+```
+
+### Implementation
+- **purchases.ts**: `canCreateEvent()` checks credits before allowing event creation
+- **events.ts**: `create()` mutation calls `useCredit()` to decrement
+- **stripe.ts**: `createCheckoutSession()` creates Stripe checkout
+- **http.ts**: Webhook handler records purchase on successful payment
+
+### User States
+| State | `canCreateEvent()` returns | UI shows |
+|-------|---------------------------|----------|
+| Has credits | `{ canCreate: true, reason: "credits", creditsRemaining: N }` | "N events remaining" + Create button |
+| Unlimited | `{ canCreate: true, reason: "unlimited" }` | "Unlimited events" badge |
+| No credits | `{ canCreate: false, reason: "no_credits" }` | Purchase buttons, disabled Create |
+
+## Legacy Free Tier (for existing free events)
+
+Legacy events with `isFreeEvent: true` still respect tier limits.
 
 ### Free Tier Limits (`convex/lib/tierLimits.ts`)
 ```typescript
@@ -463,34 +522,10 @@ export const FREE_LIMITS = {
 } as const;
 ```
 
-### Implementation
-- **Schema**: `isFreeEvent` boolean flag on events table (set at creation)
-- **Helper**: `getEventTier(ctx, eventId)` returns `"free"` or `"paid"`
-- **Gating**: Each mutation checks tier before allowing restricted features
-
-### Error Codes
-Mutations throw specific error codes for UI handling:
-```typescript
-export const TIER_LIMIT_ERRORS = {
-  GUESTS: "FREE_LIMIT_GUESTS",
-  EMAIL_CAMPAIGNS: "FREE_LIMIT_EMAIL_CAMPAIGNS",
-  ATTACHMENTS: "FREE_LIMIT_ATTACHMENTS",
-  ROUNDS: "FREE_LIMIT_ROUNDS",
-} as const;
-```
-
-### Gated Features
+### Gated Features (Legacy Only)
 | File | Function | Gate |
 |------|----------|------|
 | `guests.ts` | `create()`, `createMany()` | Max 50 guests |
 | `events.ts` | `updateNumberOfRounds()` | Max 1 round |
 | `email.ts` | `sendInvitation()`, `sendBulkInvitations()` | No campaigns |
 | `attachments.ts` | `saveAttachment()` | No attachments |
-
-### Core Features (Always Available)
-- Smart seating algorithm with constraint satisfaction
-- QR code check-in (guest and table)
-- Real-time seating view
-- Theme customization
-- Guest import (CSV/Excel)
-- Seating constraints (pin/repel/attract)
