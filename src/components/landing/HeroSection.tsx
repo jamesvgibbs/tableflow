@@ -110,7 +110,7 @@ export const HeroSection = () => {
                 { step: "1", text: "Upload guests" },
                 { step: "2", text: "Set your rules" },
                 { step: "3", text: "I seat everyone" },
-              ].map((item, i) => (
+              ].map((item) => (
                 <div
                   key={item.step}
                   className="flex items-center gap-2 bg-card/80 backdrop-blur rounded-full px-4 py-2 border border-primary/20"

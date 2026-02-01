@@ -132,7 +132,7 @@ export default function AdminPage() {
       if (result.url) {
         window.location.href = result.url
       }
-    } catch (error) {
+    } catch {
       toast.error('Could not start checkout. Please try again.')
     } finally {
       setIsPurchasing(false)
