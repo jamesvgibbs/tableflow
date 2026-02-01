@@ -11,7 +11,12 @@ const isPublicRoute = createRouteMatcher([
   "/guest/(.*)",
   "/terms",
   "/privacy",
+  "/checkout/(.*)",
   "/api/webhooks/(.*)",
+  // SEO and metadata routes
+  "/opengraph-image",
+  "/robots.txt",
+  "/sitemap.xml",
 ]);
 
 export default clerkMiddleware(async (auth, request) => {
