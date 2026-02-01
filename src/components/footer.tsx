@@ -10,8 +10,8 @@ export function Footer() {
         <div className="flex flex-col md:flex-row items-center justify-between gap-4">
           {/* Brand */}
           <div className="flex items-center gap-2">
-            <Dog className="size-5 text-primary" />
-            <span className="font-semibold">Seatherder</span>
+            <Dog className="h-5 w-5 text-primary" />
+            <span className="font-bold text-primary">Seatherder</span>
           </div>
 
           {/* Links */}

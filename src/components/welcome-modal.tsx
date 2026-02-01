@@ -36,7 +36,9 @@ export function WelcomeModal({ open, onOpenChange }: WelcomeModalProps) {
               <Dog className="size-6 text-primary" />
             </div>
             <div>
-              <DialogTitle className="text-xl">Hello! I am Seatherder.</DialogTitle>
+              <DialogTitle className="text-xl">
+                Hello! I am <span className="text-primary">Seatherder</span>.
+              </DialogTitle>
               <DialogDescription className="text-sm">
                 Your event seating assistant
               </DialogDescription>
