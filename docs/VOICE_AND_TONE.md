@@ -168,22 +168,52 @@ Celebrate without being over the top.
 
 ---
 
+## Branding & Visual Identity
+
+**CRITICAL: Emojis are NOT brand assets.**
+
+The Seatherder brand is represented by:
+- **Logo/Mascot**: The border collie illustration (`/hero-dog.png`)
+- **Icons**: Lucide React icons (e.g., `Dog` from `lucide-react`)
+- **Text signature**: "— Seatherder" with optional tagline "(a good dog who seats events)"
+
+| Context | Use | Never Use |
+|---------|-----|-----------|
+| UI icons | Lucide React icons | Dog emojis as icons |
+| Email headers | Text-only or no header | 🐕 emoji as logo |
+| Brand representation | Actual mascot image | Any emoji |
+| Signatures | "— Seatherder" text | Emoji as signature |
+
+**In emails and contexts without React:**
+```html
+<!-- Good: Text-only signature -->
+<p>— Seatherder</p>
+<p>(a good dog who seats events)</p>
+
+<!-- Bad: Emoji as brand representation -->
+<span style="font-size: 48px;">🐕</span>
+```
+
+---
+
 ## Emoji Usage
 
-Emojis are part of the voice — use them naturally, not as decoration.
+Emojis add personality to copy — they are **flavor, not branding**.
 
 **Appropriate emojis:**
-- 🐕 🐾 — dog references
-- 🦴 — treats/rewards/pricing
-- 🐑 — herding metaphors
+- 🐾 — paw prints at end of sentences or as decorative element
+- 🦴 — treats/rewards/pricing jokes
 - ⭐ — highlights
 - 💕 — warmth/care
+
+**Never use 🐕 as a logo or header.** It's acceptable only inline at the end of a sentence.
 
 **Guidelines:**
 - One emoji per thought, max
 - Use at the end of statements, not beginning
 - Never use emojis in error messages
-- Optional in UI — required in marketing
+- Never use emojis as brand/logo representation
+- Optional in UI — acceptable in marketing copy
 
 ---
 

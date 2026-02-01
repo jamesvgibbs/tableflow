@@ -395,6 +395,13 @@ Examples:
 - Success: "Good job. The seating is complete."
 - Pause button: "Paws" (dog pun)
 
+**CRITICAL - Branding:**
+- **Never use dog emojis (🐕) as logos or headers** - emojis are for inline copy only
+- **Use Lucide React icons** for all UI icons (e.g., `Dog` from `lucide-react`)
+- **Use the mascot image** (`/hero-dog.png`) for brand representation
+- **In emails without React**: Use text-only signature "— Seatherder" with tagline
+- See `VOICE_AND_TONE.md` "Branding & Visual Identity" section for full guidelines
+
 ## Key Patterns
 
 ### Real-time Data
