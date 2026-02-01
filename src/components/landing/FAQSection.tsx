@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import Link from "next/link";
 import {
   Accordion,
   AccordionContent,
@@ -80,7 +81,7 @@ export const FAQSection = () => {
                     <span className="w-10 h-10 bg-linear-to-br from-primary/20 to-accent/20 rounded-full flex items-center justify-center text-xl group-hover:scale-110 transition-transform">
                       🐾
                     </span>
-                    <span className="text-foreground">{faq.question}</span>
+                    <h3 className="text-foreground font-display text-lg m-0">{faq.question}</h3>
                   </span>
                 </AccordionTrigger>
                 <AccordionContent className="text-muted-foreground text-base pb-6 pl-14">
@@ -93,10 +94,23 @@ export const FAQSection = () => {
           ))}
         </Accordion>
 
-        {/* Decorative bone */}
-        <div className="text-center mt-12">
+        {/* Link to pricing */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true }}
+          transition={{ delay: 0.5 }}
+          className="text-center mt-12"
+        >
+          <p className="text-muted-foreground mb-2">
+            Ready to try{" "}
+            <Link href="#pricing" className="text-primary hover:underline font-medium">
+              automated event seating software
+            </Link>
+            ?
+          </p>
           <span className="text-3xl">🦴</span>
-        </div>
+        </motion.div>
       </div>
     </section>
   );

@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Sparkles } from "lucide-react";
+import { Dog, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
@@ -20,10 +20,8 @@ export const Navbar = () => {
               href="/"
               className="flex items-center gap-2 font-display text-xl font-bold text-foreground"
             >
-              <span className="text-2xl">🐕</span>
-              <span className="bg-linear-to-r from-primary to-pink-500 bg-clip-text text-transparent">
-                Seatherder
-              </span>
+              <Dog className="h-6 w-6 text-primary" />
+              <span className="text-primary">Seatherder</span>
             </Link>
           </motion.div>
 
@@ -58,31 +56,15 @@ export const Navbar = () => {
             </motion.div>
           </div>
 
-          <div className="flex items-center gap-3">
-            {/* Check In link - visible on mobile for guests */}
-            <motion.div
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className="md:hidden"
-            >
-              <Button variant="outline" size="sm" className="font-bold" asChild>
-                <Link href="/checkin">
-                  Check In
-                  <span>🐾</span>
-                </Link>
-              </Button>
-            </motion.div>
-
-            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-              <Button variant="default" size="sm" className="font-bold" asChild>
-                <Link href="/sign-in">
-                  <Sparkles className="w-4 h-4" />
-                  Get Started
-                  <span>🐾</span>
-                </Link>
-              </Button>
-            </motion.div>
-          </div>
+          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+            <Button variant="default" size="sm" className="font-bold" asChild>
+              <Link href="/sign-in">
+                <Sparkles className="w-4 h-4" />
+                <span className="hidden sm:inline">Get Started</span>
+                <span className="sm:hidden">Start</span>
+              </Link>
+            </Button>
+          </motion.div>
         </div>
       </div>
     </motion.nav>

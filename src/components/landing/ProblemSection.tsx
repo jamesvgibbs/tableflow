@@ -1,18 +1,25 @@
 "use client";
 import { motion } from "framer-motion";
 import Image from "next/image";
+import Link from "next/link";
 import { SpeechBubble } from "./SpeechBubble";
 
 export const ProblemSection = () => {
   const problems = [
     {
-      text: "The engineers sat with the engineers. They did not make new friends.",
+      external: "10 hours in a spreadsheet",
+      internal: "wondering if there's a better way",
+      emoji: "😫",
+    },
+    {
+      external: "Engineers sat with engineers. Again.",
+      internal: "the whole point was for people to mix",
       emoji: "🤓",
     },
-    { text: "Table 14 was entirely VPs. No one enjoyed this.", emoji: "😬" },
     {
-      text: "Someone named Bob was seated near someone named Linda. I do not know what Bob did. But it was wrong.",
-      emoji: "😳",
+      external: "Three people complained about their seats",
+      internal: "you can't make everyone happy manually",
+      emoji: "😬",
     },
   ];
 
@@ -29,11 +36,14 @@ export const ProblemSection = () => {
           transition={{ duration: 0.6 }}
           className="text-center mb-12"
         >
+          <p className="text-lg text-muted-foreground mb-2">
+            You have been here before.
+          </p>
           <h2 className="font-display text-3xl md:text-4xl lg:text-5xl text-foreground mb-2">
-            I have studied the humans.
+            Event seating is chaos.
           </h2>
           <h3 className="font-display text-2xl md:text-3xl text-primary">
-            They are struggling. 😔
+            It does not have to be. 🐕
           </h3>
         </motion.div>
 
@@ -47,28 +57,37 @@ export const ProblemSection = () => {
           >
             <SpeechBubble className="bg-card">
               <p className="text-lg text-muted-foreground leading-relaxed mb-4">
-                For many years I watched from the fields. I saw event planners
-                open spreadsheets at midnight. I saw them drag names into cells,
-                one by one, like sheep who do not know they are lost. 🐑
+                I have watched event planners struggle. Midnight spreadsheets.
+                Last-minute changes. The fear that someone important will end up
+                at the wrong table.
               </p>
               <p className="text-lg font-bold text-foreground">
-                I saw what happened at the conferences:
+                Sound familiar?
               </p>
             </SpeechBubble>
 
             <div className="space-y-4">
               {problems.map((problem, index) => (
                 <motion.div
-                  key={problem.text}
+                  key={problem.external}
                   initial={{ opacity: 0, x: -20 }}
                   whileInView={{ opacity: 1, x: 0 }}
                   viewport={{ once: true }}
                   transition={{ duration: 0.5, delay: 0.3 + index * 0.15 }}
                   whileHover={{ scale: 1.02, x: 8 }}
-                  className="flex items-start gap-4 bg-card rounded-2xl p-4 border-2 border-primary/10 shadow-soft cursor-default"
+                  className="bg-card rounded-2xl p-4 border-2 border-primary/10 shadow-soft cursor-default"
                 >
-                  <span className="text-3xl shrink-0">{problem.emoji}</span>
-                  <p className="text-foreground italic">{problem.text}</p>
+                  <div className="flex items-start gap-4">
+                    <span className="text-3xl shrink-0">{problem.emoji}</span>
+                    <div>
+                      <p className="text-foreground font-medium">
+                        {problem.external}
+                      </p>
+                      <p className="text-sm text-muted-foreground italic">
+                        {problem.internal}
+                      </p>
+                    </div>
+                  </div>
                 </motion.div>
               ))}
             </div>
@@ -81,14 +100,13 @@ export const ProblemSection = () => {
               className="bg-linear-to-r from-primary/10 to-accent/10 rounded-3xl p-6 border-2 border-primary/20"
             >
               <p className="text-xl font-bold text-foreground">
-                The humans had no system. They had only hope.
-                <span className="text-primary">
-                  {" "}
-                  Hope is not a seating strategy.
-                </span>
+                You deserve better than hope and spreadsheets.
               </p>
               <p className="text-lg text-muted-foreground mt-2">
-                I know this. I am a herding dog. 🐕‍🦺
+                <Link href="#features" className="text-primary font-medium hover:underline">
+                  Let me handle the seating.
+                </Link>{" "}
+                You handle the event. 🐕‍🦺
               </p>
             </motion.div>
           </motion.div>
@@ -107,7 +125,7 @@ export const ProblemSection = () => {
                 src="/problem-illustration.png"
                 width={1000}
                 height={1000}
-                alt="Chaos vs Order - confused humans at tables while a wise dog observes"
+                alt="Event planner frustrated with manual table assignment spreadsheet - showing the problem automated seating software solves"
                 className="relative w-full h-auto rounded-3xl shadow-elevated border-4 border-card"
               />
             </div>
@@ -120,7 +138,7 @@ export const ProblemSection = () => {
               transition={{ delay: 0.8, type: "spring" }}
               className="absolute -bottom-4 -right-4 bg-accent text-accent-foreground px-4 py-2 rounded-full font-bold shadow-card"
             >
-              this is me thinking 🤔
+              I can fix this 🐾
             </motion.div>
           </motion.div>
         </div>

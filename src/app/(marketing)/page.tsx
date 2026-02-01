@@ -3,7 +3,6 @@ import {
   FAQSection,
   FeaturesSection,
   FinalCTASection,
-  Footer,
   HeroSection,
   HowItWorksSection,
   Navbar,
@@ -25,7 +24,6 @@ export default function Home() {
         <FAQSection />
         <FinalCTASection />
       </main>
-      <Footer />
     </div>
   );
 }
