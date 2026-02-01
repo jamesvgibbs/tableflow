@@ -1,6 +1,7 @@
 "use node";
 
 import { action } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import Stripe from "stripe";
 
@@ -85,6 +86,17 @@ export const createCheckoutSession = action({
       },
       allow_promotion_codes: true,
     });
+
+    // Record checkout intent for abandoned cart recovery
+    const email = identity.email;
+    if (email) {
+      await ctx.runMutation(internal.checkoutRecovery.recordCheckoutIntent, {
+        userId: identity.subject,
+        email,
+        productType,
+        stripeSessionId: session.id,
+      });
+    }
 
     return { url: session.url, sessionId: session.id };
   },

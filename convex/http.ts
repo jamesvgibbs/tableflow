@@ -63,6 +63,20 @@ http.route({
       } else {
         console.error("Missing metadata in checkout session:", session.id)
       }
+
+      // Mark checkout intent as completed (for analytics)
+      await ctx.runMutation(internal.checkoutRecovery.markCheckoutCompleted, {
+        stripeSessionId: session.id,
+      })
+    }
+
+    // Handle expired checkout sessions (abandoned carts)
+    if (event.type === "checkout.session.expired") {
+      const session = event.data.object as Stripe.Checkout.Session
+      await ctx.runMutation(internal.checkoutRecovery.markCheckoutExpired, {
+        stripeSessionId: session.id,
+      })
+      console.log(`Checkout session expired: ${session.id}`)
     }
 
     return new Response("OK", { status: 200 })

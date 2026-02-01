@@ -9,7 +9,9 @@
  */
 
 import type * as attachments from "../attachments.js";
+import type * as checkoutRecovery from "../checkoutRecovery.js";
 import type * as constraints from "../constraints.js";
+import type * as crons from "../crons.js";
 import type * as email from "../email.js";
 import type * as emailQueue from "../emailQueue.js";
 import type * as events from "../events.js";
@@ -35,7 +37,9 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   attachments: typeof attachments;
+  checkoutRecovery: typeof checkoutRecovery;
   constraints: typeof constraints;
+  crons: typeof crons;
   email: typeof email;
   emailQueue: typeof emailQueue;
   events: typeof events;

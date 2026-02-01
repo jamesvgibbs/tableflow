@@ -288,6 +288,25 @@ export default defineSchema({
     .index("by_status", ["userId", "status"]),
 
   // =============================================================================
+  // Checkout Recovery (Abandoned Cart)
+  // =============================================================================
+
+  // Track checkout intents for abandoned cart recovery emails
+  checkoutIntents: defineTable({
+    userId: v.string(),                         // Clerk user ID
+    email: v.string(),                          // User's email for recovery
+    productType: v.string(),                    // "single" | "bundle_3" | "annual"
+    stripeSessionId: v.string(),                // Stripe checkout session ID
+    status: v.string(),                         // "pending" | "completed" | "expired"
+    createdAt: v.number(),                      // Timestamp when checkout started
+    convertedAt: v.optional(v.number()),        // Timestamp when purchase completed
+    followUpSentAt: v.optional(v.number()),     // Timestamp when recovery email sent
+  })
+    .index("by_user", ["userId"])
+    .index("by_stripe_session", ["stripeSessionId"])
+    .index("by_status", ["status"]),
+
+  // =============================================================================
   // Seating History (Cross-Event Memory)
   // =============================================================================
 
