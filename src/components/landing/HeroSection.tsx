@@ -5,6 +5,7 @@ import { ArrowDown, Sparkles } from "lucide-react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { SpeechBubble } from "./SpeechBubble";
+import Link from "next/link";
 
 export const HeroSection = () => {
   return (
@@ -20,9 +21,9 @@ export const HeroSection = () => {
         className="absolute top-20 left-4 md:top-24 md:left-8 z-20"
       >
         <div className="bg-accent text-accent-foreground px-2 py-1 md:px-4 md:py-2 rounded-full font-bold text-xs md:text-sm shadow-card flex items-center gap-1 md:gap-2 -rotate-6">
-          <span className="text-xs md:text-base">✨</span>
-          <span>WOOF! LIVE NOW</span>
-          <span className="text-xs md:text-base">✨</span>
+          <Sparkles className="w-4 h-4" />
+          <span>SMART SEATING</span>
+          <Sparkles className="w-4 h-4" />
         </div>
       </motion.div>
 
@@ -42,7 +43,7 @@ export const HeroSection = () => {
               {/* The good boy */}
               <Image
                 src="/hero-dog.png"
-                alt="The goodest boy - a happy border collie ready to seat your conference"
+                alt="Seatherder border collie mascot - automated table assignment software for conferences and corporate events"
                 className="relative w-full h-auto drop-shadow-2xl"
                 width={500}
                 height={500}
@@ -74,24 +75,54 @@ export const HeroSection = () => {
               transition={{ delay: 0.2, duration: 0.6 }}
             >
               <SpeechBubble direction="left" className="mb-6">
+                {/* Customer problem first */}
+                <p className="text-lg text-muted-foreground mb-3">
+                  Planning event seating? Spreadsheet chaos? I can help.
+                </p>
+
                 <h1 className="font-display text-3xl md:text-4xl lg:text-5xl leading-tight mb-4 text-foreground">
-                  <span className="text-primary">*ahem*</span>
-                  <br />I am a border collie.
+                  <span className="text-primary">Smart Event Seating Software</span>
                   <br />
                   <span className="bg-linear-to-r from-primary via-pink-500 to-accent bg-clip-text text-transparent">
-                    I will seat your conference.
+                    Seat tables in minutes.
                   </span>
                 </h1>
 
                 <p className="text-lg text-muted-foreground leading-relaxed">
-                  This is my documentary. It is about me and the problem I have
-                  solved. The problem is:{" "}
-                  <strong className="text-foreground">seating.</strong>
-                  <br />
-                  The solution is:{" "}
-                  <strong className="text-primary">also me.</strong> 🐕
+                  I am a border collie who automates table assignments. You tell
+                  me the rules. I do the math.{" "}
+                  <strong className="text-foreground">
+                    Everyone sits with someone new.
+                  </strong>{" "}
+                  🐕
                 </p>
               </SpeechBubble>
+            </motion.div>
+
+            {/* Clear 3-step plan */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.4 }}
+              className="flex flex-wrap gap-4 justify-center lg:justify-start text-sm"
+            >
+              {[
+                { step: "1", text: "Upload guests" },
+                { step: "2", text: "Set your rules" },
+                { step: "3", text: "I seat everyone" },
+              ].map((item, i) => (
+                <div
+                  key={item.step}
+                  className="flex items-center gap-2 bg-card/80 backdrop-blur rounded-full px-4 py-2 border border-primary/20"
+                >
+                  <span className="w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold">
+                    {item.step}
+                  </span>
+                  <span className="text-foreground font-medium">
+                    {item.text}
+                  </span>
+                </div>
+              ))}
             </motion.div>
 
             <motion.div
@@ -100,10 +131,12 @@ export const HeroSection = () => {
               transition={{ delay: 0.5, duration: 0.6 }}
               className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start"
             >
-              <Button variant="hero" size="xl">
-                <Sparkles className="w-5 h-5" />
-                Let Me Help You
-                <span className="text-xl">🐾</span>
+              <Button variant="hero" size="xl" asChild>
+                <Link href="/sign-up">
+                  <Sparkles className="w-5 h-5" />
+                  Get Started
+                  <span className="text-xl">🐾</span>
+                </Link>
               </Button>
               <Button
                 variant="outline"
@@ -114,12 +147,12 @@ export const HeroSection = () => {
                     ?.scrollIntoView({ behavior: "smooth" })
                 }
               >
-                Watch how I work
+                See how it works
                 <ArrowDown className="w-5 h-5" />
               </Button>
             </motion.div>
 
-            {/* Fun stats */}
+            {/* Social proof */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -127,9 +160,9 @@ export const HeroSection = () => {
               className="flex flex-wrap gap-4 justify-center lg:justify-start pt-4"
             >
               {[
-                { num: "10,000+", label: "humans seated", emoji: "👥" },
-                { num: "500+", label: "events herded", emoji: "🎪" },
-                { num: "∞", label: "tail wags", emoji: "🐕" },
+                { num: "10,000+", label: "guests seated", emoji: "👥" },
+                { num: "500+", label: "events completed", emoji: "🎪" },
+                { num: "$49", label: "per event", emoji: "💰" },
               ].map((stat, i) => (
                 <motion.div
                   key={stat.label}
@@ -154,7 +187,7 @@ export const HeroSection = () => {
       {/* Scroll indicator */}
       <div className="absolute bottom-8 left-1/2 -translate-x-1/2">
         <div className="flex flex-col items-center gap-2 text-primary">
-          <span className="text-sm font-bold">scroll for more!</span>
+          <span className="text-sm font-bold">scroll for more</span>
           <span className="text-2xl">🐾</span>
         </div>
       </div>

@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Sparkles, Heart, ArrowRight } from "lucide-react";
+import Link from "next/link";
 
 export const FinalCTASection = () => {
   return (
@@ -17,36 +18,80 @@ export const FinalCTASection = () => {
           viewport={{ once: true }}
           transition={{ duration: 0.6 }}
         >
-          {/* Film clapper emoji */}
+          {/* Success vs Failure framing */}
+          <div className="grid md:grid-cols-2 gap-6 mb-12">
+            {/* Failure state */}
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.2 }}
+              className="bg-card/50 rounded-2xl p-6 border-2 border-muted text-left"
+            >
+              <p className="text-sm text-muted-foreground uppercase tracking-wide mb-2">
+                Without Seatherder
+              </p>
+              <ul className="space-y-2 text-muted-foreground">
+                <li className="flex items-start gap-2">
+                  <span>😫</span>
+                  <span>Hours in spreadsheets</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span>😬</span>
+                  <span>Same people at same tables</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span>😰</span>
+                  <span>Last-minute chaos</span>
+                </li>
+              </ul>
+            </motion.div>
+
+            {/* Success state */}
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.3 }}
+              className="bg-primary/5 rounded-2xl p-6 border-2 border-primary/30 text-left"
+            >
+              <p className="text-sm text-primary uppercase tracking-wide mb-2">
+                With Seatherder
+              </p>
+              <ul className="space-y-2 text-foreground">
+                <li className="flex items-start gap-2">
+                  <span>✨</span>
+                  <span>Seating done in minutes</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span>🤝</span>
+                  <span>Everyone meets someone new</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span>😌</span>
+                  <span>You focus on the event, not logistics</span>
+                </li>
+              </ul>
+            </motion.div>
+          </div>
+
           <h2 className="font-display text-3xl md:text-4xl lg:text-5xl mb-6 text-foreground">
-            This concludes my documentary.
+            Ready to try?
           </h2>
 
           <motion.div
             initial={{ opacity: 0 }}
             whileInView={{ opacity: 1 }}
             viewport={{ once: true }}
-            transition={{ delay: 0.3 }}
+            transition={{ delay: 0.4 }}
             className="bg-card rounded-3xl p-8 mb-8 border-4 border-primary/20 shadow-card"
           >
             <p className="text-lg text-muted-foreground mb-4">
-              If you are still reading, you are my kind of human.
-              <span className="text-foreground font-bold">
-                {" "}
-                Organized. Curious. Tired of spreadsheets.
-              </span>
-            </p>
-
-            <p className="text-lg text-muted-foreground mb-4">
-              I would like to seat your conference. Your first event is free.
-              <span className="text-primary font-bold">
-                {" "}
-                I will not let you down.
-              </span>
+              $49 per event. No subscription required.
             </p>
 
             <p className="text-xl font-display font-bold text-foreground flex items-center justify-center gap-2">
-              Click the button. I am ready. 🐕
+              I am ready when you are. 🐕
             </p>
           </motion.div>
 
@@ -56,10 +101,12 @@ export const FinalCTASection = () => {
             viewport={{ once: true }}
             transition={{ delay: 0.5, type: "spring" }}
           >
-            <Button variant="hero" size="xxl" className="mb-4">
-              <Sparkles className="w-6 h-6" />
-              Start Your First Event Free
-              <ArrowRight className="w-6 h-6" />
+            <Button variant="hero" size="xxl" className="mb-4" asChild>
+              <Link href="/sign-up">
+                <Sparkles className="w-6 h-6" />
+                Get Started
+                <ArrowRight className="w-6 h-6" />
+              </Link>
             </Button>
           </motion.div>
 
@@ -70,7 +117,7 @@ export const FinalCTASection = () => {
             transition={{ delay: 0.7 }}
             className="text-muted-foreground flex items-center justify-center gap-2 text-sm"
           >
-            No credit card. No commitment. Just good seating.
+            Takes 2 minutes to set up. Then I do the work.
             <Heart className="w-4 h-4 text-primary" />
           </motion.p>
 
@@ -84,7 +131,9 @@ export const FinalCTASection = () => {
           >
             <span className="text-4xl">🐾</span>
             <p className="font-display text-lg text-foreground">— Seatherder</p>
-            <p className="text-sm text-muted-foreground italic">(the dog)</p>
+            <p className="text-sm text-muted-foreground italic">
+              (a good dog who seats events)
+            </p>
           </motion.div>
         </motion.div>
       </div>
