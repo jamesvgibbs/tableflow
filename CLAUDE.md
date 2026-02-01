@@ -105,7 +105,9 @@ convex/
 ├── sessions.ts                 # Sessions/workshops CRUD
 ├── seatingHistory.ts           # Cross-event seating history
 ├── themes.ts                   # Theme management
-└── http.ts                     # HTTP helpers
+├── http.ts                     # HTTP helpers
+└── lib/
+    └── tierLimits.ts           # Free tier limits and feature gating
 ```
 
 ### Path Aliases
@@ -121,6 +123,7 @@ convex/
 **events** - Event configuration
 - Core: `name`, `tableSize`, `createdAt`, `isAssigned`
 - Owner: `userId` (Clerk user ID)
+- Tier: `isFreeEvent` (boolean, limits features when true)
 - Multi-round: `numberOfRounds`, `roundDuration`, `currentRound`, `roundStartedAt`, `isPaused`, `pausedTimeRemaining`
 - Theme: `themePreset`, `customColors` (6 OKLCH colors)
 - Email: `emailSettings` (sender name, reply-to, custom subjects)
@@ -445,3 +448,49 @@ Events are scoped to users via `userId` (Clerk user ID):
 - Queries filter by authenticated user
 - Seating history scoped to `organizerId`
 - Row-level security enforced in Convex functions
+
+## Free Tier System
+
+Free events allow users to experience core value (seating algorithm, QR check-in) while limiting high-cost features (email, storage).
+
+### Free Tier Limits (`convex/lib/tierLimits.ts`)
+```typescript
+export const FREE_LIMITS = {
+  maxGuests: 50,              // Max guests per free event
+  allowEmailCampaigns: false, // No bulk email sending
+  allowAttachments: false,    // No file attachments
+  maxRounds: 1,               // Single round only
+} as const;
+```
+
+### Implementation
+- **Schema**: `isFreeEvent` boolean flag on events table (set at creation)
+- **Helper**: `getEventTier(ctx, eventId)` returns `"free"` or `"paid"`
+- **Gating**: Each mutation checks tier before allowing restricted features
+
+### Error Codes
+Mutations throw specific error codes for UI handling:
+```typescript
+export const TIER_LIMIT_ERRORS = {
+  GUESTS: "FREE_LIMIT_GUESTS",
+  EMAIL_CAMPAIGNS: "FREE_LIMIT_EMAIL_CAMPAIGNS",
+  ATTACHMENTS: "FREE_LIMIT_ATTACHMENTS",
+  ROUNDS: "FREE_LIMIT_ROUNDS",
+} as const;
+```
+
+### Gated Features
+| File | Function | Gate |
+|------|----------|------|
+| `guests.ts` | `create()`, `createMany()` | Max 50 guests |
+| `events.ts` | `updateNumberOfRounds()` | Max 1 round |
+| `email.ts` | `sendInvitation()`, `sendBulkInvitations()` | No campaigns |
+| `attachments.ts` | `saveAttachment()` | No attachments |
+
+### Core Features (Always Available)
+- Smart seating algorithm with constraint satisfaction
+- QR code check-in (guest and table)
+- Real-time seating view
+- Theme customization
+- Guest import (CSV/Excel)
+- Seating constraints (pin/repel/attract)
