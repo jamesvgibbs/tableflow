@@ -25,7 +25,7 @@
       "muted": "#3A5548"
     },
     "abstract-landscape": {
-      "primary": "#3B82F6",
+      "primary": "#1E6FF5",
       "secondary": "#D4A574",
       "accent": "#F59E0B",
       "background": "#1E3A5F",
@@ -35,7 +35,7 @@
     "desert-matisse": {
       "primary": "#C1440E",
       "secondary": "#E8B832",
-      "accent": "#D64045",
+      "accent": "#D63E43",
       "background": "#2C1810",
       "foreground": "#FAF3E0",
       "muted": "#4A2C20"
@@ -67,7 +67,7 @@
     "modern": {
       "primary": "#0F172A",
       "secondary": "#F1F5F9",
-      "accent": "#3B82F6",
+      "accent": "#1E6FF5",
       "background": "#FFFFFF",
       "foreground": "#0F172A",
       "muted": "#E2E8F0"
@@ -75,7 +75,7 @@
     "corporate": {
       "primary": "#1E40AF",
       "secondary": "#DBEAFE",
-      "accent": "#059669",
+      "accent": "#05875F",
       "background": "#F8FAFC",
       "foreground": "#1E293B",
       "muted": "#CBD5E1"
