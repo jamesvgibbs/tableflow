@@ -37,7 +37,8 @@ http.route({
     let event: Stripe.Event
     try {
       const body = await request.text()
-      event = stripe.webhooks.constructEvent(body, signature, webhookSecret)
+      // Must use async version in Convex environment
+      event = await stripe.webhooks.constructEventAsync(body, signature, webhookSecret)
     } catch (err) {
       console.error("Webhook signature verification failed:", err)
       return new Response("Webhook signature verification failed", { status: 400 })
