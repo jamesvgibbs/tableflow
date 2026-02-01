@@ -2,6 +2,7 @@ import { v } from "convex/values"
 import { mutation, query, QueryCtx, MutationCtx } from "./_generated/server"
 import { api, internal } from "./_generated/api"
 import type { Id } from "./_generated/dataModel"
+import { getEventTier, FREE_LIMITS, TIER_LIMIT_ERRORS } from "./lib/tierLimits"
 
 // =============================================================================
 // Authentication Helpers
@@ -273,6 +274,18 @@ export const create = mutation({
     const userId = await getAuthenticatedUserId(ctx)
     await verifyEventOwnership(ctx, args.eventId, userId)
 
+    // Check free tier guest limit
+    const tier = await getEventTier(ctx, args.eventId)
+    if (tier === "free") {
+      const existingGuests = await ctx.db
+        .query("guests")
+        .withIndex("by_event", (q) => q.eq("eventId", args.eventId))
+        .collect()
+      if (existingGuests.length >= FREE_LIMITS.maxGuests) {
+        throw new Error(TIER_LIMIT_ERRORS.GUESTS)
+      }
+    }
+
     // Generate unique self-service token
     const selfServiceToken = await generateUniqueSelfServiceToken(ctx)
 
@@ -330,6 +343,19 @@ export const createMany = mutation({
   handler: async (ctx, args) => {
     const userId = await getAuthenticatedUserId(ctx)
     await verifyEventOwnership(ctx, args.eventId, userId)
+
+    // Check free tier guest limit
+    const tier = await getEventTier(ctx, args.eventId)
+    if (tier === "free") {
+      const existingGuests = await ctx.db
+        .query("guests")
+        .withIndex("by_event", (q) => q.eq("eventId", args.eventId))
+        .collect()
+      const totalAfterAdd = existingGuests.length + args.guests.length
+      if (totalAfterAdd > FREE_LIMITS.maxGuests) {
+        throw new Error(TIER_LIMIT_ERRORS.GUESTS)
+      }
+    }
 
     const ids: Id<"guests">[] = []
     for (const guest of args.guests) {

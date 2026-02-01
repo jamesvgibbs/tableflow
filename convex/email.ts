@@ -5,6 +5,7 @@ import type { Id, Doc } from "./_generated/dataModel"
 import { resolveThemeColors, getContrastColor } from "./themes"
 import type { ThemeColors } from "./themes"
 import { EMAIL_PRIORITY } from "./emailQueue"
+import { getEventTier, FREE_LIMITS, TIER_LIMIT_ERRORS } from "./lib/tierLimits"
 
 // =============================================================================
 // Authentication Helpers
@@ -419,6 +420,12 @@ export const sendInvitation = mutation({
     const guest = await ctx.db.get(args.guestId)
     if (!guest) {
       throw new Error("Guest not found")
+    }
+
+    // Check free tier limit for email campaigns
+    const tier = await getEventTier(ctx, guest.eventId)
+    if (tier === "free" && !FREE_LIMITS.allowEmailCampaigns) {
+      throw new Error(TIER_LIMIT_ERRORS.EMAIL_CAMPAIGNS)
     }
 
     if (!guest.email) {
@@ -899,6 +906,12 @@ export const sendBulkInvitations = mutation({
   }> => {
     const userId = await getAuthenticatedUserId(ctx)
     await verifyEventOwnership(ctx, args.eventId, userId)
+
+    // Check free tier limit for email campaigns
+    const tier = await getEventTier(ctx, args.eventId)
+    if (tier === "free" && !FREE_LIMITS.allowEmailCampaigns) {
+      throw new Error(TIER_LIMIT_ERRORS.EMAIL_CAMPAIGNS)
+    }
 
     const event = await ctx.db.get(args.eventId)
     if (!event) {
