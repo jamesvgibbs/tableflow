@@ -289,7 +289,7 @@ export default function PrivacyPage() {
             />
           </SubSection>
 
-          <SubSection title="Your Rights Regarding Automated Processing">
+          <SubSection title="Your Rights Regarding AI & Automated Processing">
             <Paragraph>
               You have the following rights concerning our automated processing:
             </Paragraph>
