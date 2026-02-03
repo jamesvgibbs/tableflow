@@ -3,8 +3,8 @@
 import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
-import { useQuery, useMutation, useAction } from 'convex/react'
-import { useUser } from '@clerk/nextjs'
+import { useQuery, useMutation, useAction, useConvexAuth } from 'convex/react'
+import { useUser, useAuth } from '@clerk/nextjs'
 import { api } from '@convex/_generated/api'
 import { Id } from '@convex/_generated/dataModel'
 import { generateEventName } from '@/lib/event-names'
@@ -31,6 +31,8 @@ export default function AdminPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user } = useUser()
+  const { signOut } = useAuth()
+  const { isAuthenticated, isLoading: isConvexLoading } = useConvexAuth()
 
   // Delete dialog state
   const [deleteDialogEvent, setDeleteDialogEvent] = useState<{ id: string; name: string } | null>(null)
@@ -122,6 +124,12 @@ export default function AdminPage() {
   }
 
   const handlePurchase = async (productType: string) => {
+    // Check if Convex auth is ready before calling action
+    if (isConvexLoading || !isAuthenticated) {
+      toast.error('Still connecting. Please try again in a moment.')
+      return
+    }
+
     setIsPurchasing(true)
     try {
       const baseUrl = window.location.origin
@@ -132,8 +140,16 @@ export default function AdminPage() {
       if (result.url) {
         window.location.href = result.url
       }
-    } catch {
-      toast.error('Could not start checkout. Please try again.')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error'
+      if (message === 'Not authenticated') {
+        // Auth token expired or invalid - sign out and redirect to sign-in
+        toast.error('Your session has expired. Please sign in again.')
+        await signOut()
+        router.push('/sign-in?redirect_url=/admin')
+      } else {
+        toast.error('Could not start checkout. Please try again.')
+      }
     } finally {
       setIsPurchasing(false)
     }
@@ -219,7 +235,7 @@ export default function AdminPage() {
                       variant="outline"
                       size="sm"
                       onClick={() => handlePurchase('single')}
-                      disabled={isPurchasing}
+                      disabled={isPurchasing || isConvexLoading || !isAuthenticated}
                     >
                       1 Event · $49
                     </Button>
@@ -227,14 +243,14 @@ export default function AdminPage() {
                       variant="outline"
                       size="sm"
                       onClick={() => handlePurchase('bundle_3')}
-                      disabled={isPurchasing}
+                      disabled={isPurchasing || isConvexLoading || !isAuthenticated}
                     >
                       3 Events · $129
                     </Button>
                     <Button
                       size="sm"
                       onClick={() => handlePurchase('annual')}
-                      disabled={isPurchasing}
+                      disabled={isPurchasing || isConvexLoading || !isAuthenticated}
                     >
                       <Sparkles className="h-4 w-4 mr-1" />
                       Unlimited · $249/yr
