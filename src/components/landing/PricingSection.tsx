@@ -1,13 +1,9 @@
 "use client";
 
-import { useState } from "react";
 import { motion } from "framer-motion";
-import { Check, Sparkles, Loader2 } from "lucide-react";
+import { Check, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useAction } from "convex/react";
-import { api } from "@convex/_generated/api";
-import { useAuth } from "@clerk/nextjs";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 const plans = [
   {
@@ -60,32 +56,6 @@ const plans = [
 ];
 
 export const PricingSection = () => {
-  const { isSignedIn } = useAuth();
-  const router = useRouter();
-  const createCheckout = useAction(api.stripe.createCheckoutSession);
-  const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
-
-  const handlePurchase = async (planId: string) => {
-    if (!isSignedIn) {
-      // Redirect to sign in with return URL
-      router.push(`/sign-in?redirect_url=${encodeURIComponent("/#pricing")}`);
-      return;
-    }
-
-    setLoadingPlan(planId);
-    try {
-      const result = await createCheckout({ productType: planId });
-      if (result.url) {
-        window.location.href = result.url;
-      }
-    } catch (error) {
-      console.error("Checkout error:", error);
-      // Could show a toast here
-    } finally {
-      setLoadingPlan(null);
-    }
-  };
-
   return (
     <section id="pricing" className="py-24 px-4 relative overflow-hidden">
       {/* Static floating treats */}
@@ -173,23 +143,15 @@ export const PricingSection = () => {
               </ul>
 
               <Button
-                onClick={() => handlePurchase(plan.id)}
-                disabled={loadingPlan !== null}
                 variant={plan.popular ? "hero" : "outline"}
                 size="lg"
                 className="w-full"
+                asChild
               >
-                {loadingPlan === plan.id ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                    Loading...
-                  </>
-                ) : (
-                  <>
-                    {plan.popular && <Sparkles className="w-4 h-4 mr-2" />}
-                    Get Started
-                  </>
-                )}
+                <Link href="/sign-up">
+                  {plan.popular && <Sparkles className="w-4 h-4 mr-2" />}
+                  Get Started
+                </Link>
               </Button>
             </motion.div>
           ))}
