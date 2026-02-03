@@ -1,17 +1,91 @@
 "use client";
-import { motion } from "framer-motion";
-import { Check, Heart, Sparkles } from "lucide-react";
-import { Button } from "@/components/ui/button";
 
-const features = [
-  { text: "Unlimited guests", emoji: "👥" },
-  { text: "Unlimited rounds", emoji: "🔄" },
-  { text: "All the themes", emoji: "🎨" },
-  { text: "QR codes that work", emoji: "📱" },
-  { text: "Me, thinking very hard", emoji: "🧠" },
+import { useState } from "react";
+import { motion } from "framer-motion";
+import { Check, Sparkles, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useAction } from "convex/react";
+import { api } from "@convex/_generated/api";
+import { useAuth } from "@clerk/nextjs";
+import { useRouter } from "next/navigation";
+
+const plans = [
+  {
+    id: "single",
+    name: "Single Event",
+    price: 49,
+    description: "Perfect for a one-time event",
+    features: [
+      "1 event",
+      "Unlimited guests",
+      "Unlimited rounds",
+      "All themes",
+      "QR check-in",
+      "Email campaigns",
+    ],
+    popular: false,
+  },
+  {
+    id: "bundle_3",
+    name: "3-Event Bundle",
+    price: 129,
+    pricePerEvent: 43,
+    description: "Save $18 across three events",
+    features: [
+      "3 events",
+      "Unlimited guests",
+      "Unlimited rounds",
+      "All themes",
+      "QR check-in",
+      "Email campaigns",
+    ],
+    popular: true,
+  },
+  {
+    id: "annual",
+    name: "Annual Unlimited",
+    price: 249,
+    description: "Best for frequent event planners",
+    features: [
+      "Unlimited events",
+      "Unlimited guests",
+      "Unlimited rounds",
+      "All themes",
+      "QR check-in",
+      "Email campaigns",
+      "Priority support",
+    ],
+    popular: false,
+  },
 ];
 
 export const PricingSection = () => {
+  const { isSignedIn } = useAuth();
+  const router = useRouter();
+  const createCheckout = useAction(api.stripe.createCheckoutSession);
+  const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
+
+  const handlePurchase = async (planId: string) => {
+    if (!isSignedIn) {
+      // Redirect to sign in with return URL
+      router.push(`/sign-in?redirect_url=${encodeURIComponent("/#pricing")}`);
+      return;
+    }
+
+    setLoadingPlan(planId);
+    try {
+      const result = await createCheckout({ productType: planId });
+      if (result.url) {
+        window.location.href = result.url;
+      }
+    } catch (error) {
+      console.error("Checkout error:", error);
+      // Could show a toast here
+    } finally {
+      setLoadingPlan(null);
+    }
+  };
+
   return (
     <section id="pricing" className="py-24 px-4 relative overflow-hidden">
       {/* Static floating treats */}
@@ -29,7 +103,7 @@ export const PricingSection = () => {
         </span>
       ))}
 
-      <div className="container max-w-4xl mx-auto relative">
+      <div className="container max-w-6xl mx-auto relative">
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -40,89 +114,97 @@ export const PricingSection = () => {
           <h2 className="font-display text-3xl md:text-4xl lg:text-5xl mb-2 text-foreground">
             I do not play games.
           </h2>
-          <p className="text-xl text-primary font-bold">
-            Here is what it costs. No tricks! 🐕
+          <p className="text-xl text-primary font-bold mb-4">
+            Here is what it costs. No tricks. 🐕
+          </p>
+          <p className="text-muted-foreground max-w-xl mx-auto">
+            $49 per event. I want you to see that I am good at my job.
           </p>
         </motion.div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 40, rotate: -2 }}
-          whileInView={{ opacity: 1, y: 0, rotate: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6, delay: 0.2, type: "spring" }}
-          className="relative"
-        >
-          {/* Subtle background */}
-          <div className="absolute -inset-8 bg-linear-to-r from-primary/10 via-accent/10 to-primary/10 rounded-4xl blur-2xl" />
-
-          <div className="relative bg-card border-4 border-primary rounded-4xl p-8 md:p-12 shadow-elevated overflow-hidden">
-            {/* Confetti pattern */}
-            <div className="absolute inset-0 confetti-bg opacity-30" />
-
-            <div className="relative text-center">
-              <span className="inline-block bg-primary text-primary-foreground text-sm font-bold uppercase tracking-widest px-6 py-2 rounded-full mb-6 shadow-glow -rotate-2">
-                ✨ The Only Plan ✨
-              </span>
-
-              <p className="text-lg text-muted-foreground mb-8 max-w-xl mx-auto">
-                One price. All features. No tiers named things like
-                &ldquo;Professional&rdquo; or &ldquo;Enterprise.&rdquo; I do not
-                know what those words mean. I know what{" "}
-                <strong className="text-foreground">
-                  &ldquo;seating&rdquo;
-                </strong>{" "}
-                means.
-              </p>
-
-              <div className="flex flex-col items-center mb-8">
-                <div className="flex items-baseline gap-2 mb-2">
-                  <span className="font-display text-6xl md:text-7xl font-bold bg-linear-to-r from-primary via-pink-500 to-accent bg-clip-text text-transparent">
-                    $49
-                  </span>
-                  <span className="text-muted-foreground text-xl">
-                    per event
-                  </span>
-                </div>
-                <span className="text-sm text-success font-bold">
-                  That is like 49 treats! 🦴
+        <div className="grid md:grid-cols-3 gap-6 lg:gap-8">
+          {plans.map((plan, index) => (
+            <motion.div
+              key={plan.id}
+              initial={{ opacity: 0, y: 40 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5, delay: index * 0.1 }}
+              className={`relative bg-card border-3 rounded-3xl p-6 lg:p-8 shadow-card ${
+                plan.popular
+                  ? "border-primary shadow-elevated scale-105"
+                  : "border-primary/20"
+              }`}
+            >
+              {plan.popular && (
+                <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground text-xs font-bold uppercase tracking-widest px-4 py-1 rounded-full">
+                  Most Popular
                 </span>
+              )}
+
+              <div className="text-center mb-6">
+                <h3 className="font-display text-xl mb-2 text-foreground">
+                  {plan.name}
+                </h3>
+                <div className="flex items-baseline justify-center gap-1 mb-2">
+                  <span className="font-display text-4xl lg:text-5xl font-bold text-primary">
+                    ${plan.price}
+                  </span>
+                  {plan.pricePerEvent && (
+                    <span className="text-sm text-muted-foreground">
+                      (${plan.pricePerEvent}/event)
+                    </span>
+                  )}
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  {plan.description}
+                </p>
               </div>
 
-              <ul className="space-y-4 mb-10 max-w-sm mx-auto">
-                {features.map((feature, index) => (
-                  <motion.li
-                    key={feature.text}
-                    initial={{ opacity: 0, x: -20 }}
-                    whileInView={{ opacity: 1, x: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ duration: 0.4, delay: 0.4 + index * 0.1 }}
-                    className="flex items-center gap-4 text-left"
-                  >
-                    <div className="w-8 h-8 rounded-full bg-success/20 flex items-center justify-center shrink-0">
-                      <Check className="w-5 h-5 text-success" />
+              <ul className="space-y-3 mb-6">
+                {plan.features.map((feature) => (
+                  <li key={feature} className="flex items-center gap-3">
+                    <div className="w-5 h-5 rounded-full bg-success/20 flex items-center justify-center shrink-0">
+                      <Check className="w-3 h-3 text-success" />
                     </div>
-                    <span className="font-medium text-foreground">
-                      {feature.text}
-                    </span>
-                    <span className="text-xl">{feature.emoji}</span>
-                  </motion.li>
+                    <span className="text-sm text-foreground">{feature}</span>
+                  </li>
                 ))}
               </ul>
 
-              <Button variant="hero" size="xxl" className="mb-4">
-                <Sparkles className="w-6 h-6" />
-                Start Free
-                <Heart className="w-6 h-6 text-white" />
+              <Button
+                onClick={() => handlePurchase(plan.id)}
+                disabled={loadingPlan !== null}
+                variant={plan.popular ? "hero" : "outline"}
+                size="lg"
+                className="w-full"
+              >
+                {loadingPlan === plan.id ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                    Loading...
+                  </>
+                ) : (
+                  <>
+                    {plan.popular && <Sparkles className="w-4 h-4 mr-2" />}
+                    Get Started
+                  </>
+                )}
               </Button>
+            </motion.div>
+          ))}
+        </div>
 
-              <p className="text-sm text-muted-foreground flex items-center justify-center gap-2">
-                Your first event costs nothing. I want you to see that I am
-                good.
-                <span className="text-xl">🐕</span>
-              </p>
-            </div>
-          </div>
-        </motion.div>
+        <motion.p
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6, delay: 0.4 }}
+          className="text-center text-sm text-muted-foreground mt-8"
+        >
+          All plans include a 30-day money-back guarantee. I am confident you
+          will be satisfied. 🐕
+        </motion.p>
       </div>
     </section>
   );

@@ -1,12 +1,14 @@
 import { v } from "convex/values"
 import { mutation, query, QueryCtx, MutationCtx } from "./_generated/server"
 import { Id } from "./_generated/dataModel"
+import { internal } from "./_generated/api"
 import {
   calculateGuestCompatibility,
   calculateDepartmentConcentrationPenalty,
   DEFAULT_WEIGHTS,
   type MatchingWeights,
 } from "./matching"
+import { getEventTier, FREE_LIMITS, TIER_LIMIT_ERRORS } from "./lib/tierLimits"
 
 // =============================================================================
 // Authentication Helpers
@@ -174,8 +176,44 @@ export const create = mutation({
     // Get authenticated user (optional during migration)
     const userId = await getAuthenticatedUserId(ctx)
 
+    if (!userId) {
+      throw new Error("You must be signed in to create an event")
+    }
+
+    // Check if user has credits to create an event
+    const purchases = await ctx.db
+      .query("purchases")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect()
+
+    // Check for active credits
+    const activePurchases = purchases.filter((p) => p.status === "active")
+
+    // Check for unlimited subscription
+    const hasUnlimited = activePurchases.some(
+      (p) =>
+        p.eventCredits === -1 &&
+        (!p.expiresAt || new Date(p.expiresAt) > new Date())
+    )
+
+    if (!hasUnlimited) {
+      // Check for available credits
+      const totalCredits = activePurchases.reduce((sum, p) => {
+        if (p.eventCredits === -1) return sum
+        const remaining = p.eventCredits - p.eventsUsed
+        return sum + Math.max(0, remaining)
+      }, 0)
+
+      if (totalCredits <= 0) {
+        throw new Error("NO_CREDITS")
+      }
+
+      // Use a credit
+      await ctx.runMutation(internal.purchases.useCredit, { userId })
+    }
+
     const eventId = await ctx.db.insert("events", {
-      userId: userId ?? undefined,  // Set owner if authenticated
+      userId,
       name: args.name,
       tableSize: args.tableSize,
       createdAt: new Date().toISOString(),
@@ -184,6 +222,7 @@ export const create = mutation({
       roundDuration: args.roundDuration || 30,
       eventType: args.eventType,
       eventTypeSettings: args.eventTypeSettings,
+      isFreeEvent: false, // All events are now paid events
     })
     return eventId
   },
@@ -272,6 +311,12 @@ export const updateNumberOfRounds = mutation({
 
     const event = await ctx.db.get(args.id)
     if (!event) throw new Error("Event not found")
+
+    // Check free tier limit for rounds
+    const tier = await getEventTier(ctx, args.id)
+    if (tier === "free" && args.numberOfRounds > FREE_LIMITS.maxRounds) {
+      throw new Error(TIER_LIMIT_ERRORS.ROUNDS)
+    }
 
     const newRounds = Math.max(1, Math.min(10, args.numberOfRounds))
     const oldRounds = event.numberOfRounds || 1

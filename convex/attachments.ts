@@ -1,6 +1,7 @@
 import { v } from "convex/values"
 import { mutation, query, QueryCtx, MutationCtx } from "./_generated/server"
 import { Id } from "./_generated/dataModel"
+import { getEventTier, FREE_LIMITS, TIER_LIMIT_ERRORS } from "./lib/tierLimits"
 
 // =============================================================================
 // Authentication Helpers
@@ -101,6 +102,12 @@ export const saveAttachment = mutation({
   handler: async (ctx, args) => {
     const userId = await getAuthenticatedUserId(ctx)
     await verifyEventOwnership(ctx, args.eventId, userId)
+
+    // Check free tier limit for attachments
+    const tier = await getEventTier(ctx, args.eventId)
+    if (tier === "free" && !FREE_LIMITS.allowAttachments) {
+      throw new Error(TIER_LIMIT_ERRORS.ATTACHMENTS)
+    }
 
     // If guestId provided, verify guest exists and belongs to event
     if (args.guestId) {

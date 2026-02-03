@@ -13,20 +13,36 @@ function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
   return result
     ? {
-        r: parseInt(result[1], 16),
-        g: parseInt(result[2], 16),
-        b: parseInt(result[3], 16),
+        r: parseInt(result[1], 16) / 255,
+        g: parseInt(result[2], 16) / 255,
+        b: parseInt(result[3], 16) / 255,
       }
     : null
 }
 
-function getContrastColor(hex: string): string {
-  const rgb = hexToRgb(hex)
-  if (!rgb) return '#000000'
+// WCAG 2.1 relative luminance calculation
+function getLuminance(rgb: { r: number; g: number; b: number }): number {
+  const toLinear = (c: number) =>
+    c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)
+  return 0.2126 * toLinear(rgb.r) + 0.7152 * toLinear(rgb.g) + 0.0722 * toLinear(rgb.b)
+}
 
-  // Calculate relative luminance
-  const luminance = (0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b) / 255
-  return luminance > 0.5 ? '#000000' : '#FFFFFF'
+function getContrastRatio(hex1: string, hex2: string): number {
+  const rgb1 = hexToRgb(hex1)
+  const rgb2 = hexToRgb(hex2)
+  if (!rgb1 || !rgb2) return 1
+  const l1 = getLuminance(rgb1)
+  const l2 = getLuminance(rgb2)
+  const lighter = Math.max(l1, l2)
+  const darker = Math.min(l1, l2)
+  return (lighter + 0.05) / (darker + 0.05)
+}
+
+// Choose black or white text based on which provides better WCAG contrast
+function getContrastColor(hex: string): string {
+  const blackRatio = getContrastRatio(hex, '#000000')
+  const whiteRatio = getContrastRatio(hex, '#FFFFFF')
+  return blackRatio > whiteRatio ? '#000000' : '#FFFFFF'
 }
 
 function adjustBrightness(hex: string, factor: number): string {

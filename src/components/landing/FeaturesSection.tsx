@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import Link from "next/link";
 import {
   FileSpreadsheet,
   Palette,
@@ -69,8 +70,15 @@ export const FeaturesSection = () => {
           <h2 className="font-display text-3xl md:text-4xl lg:text-5xl mb-2 text-foreground">
             I have many capabilities.
           </h2>
-          <p className="text-xl text-primary font-bold">
-            Here are some. They are all good. 🐕
+          <h3 className="text-xl text-primary font-bold mb-4">
+            Table Assignment Software for Conferences, Weddings, and Corporate Events 🐕
+          </h3>
+          <p className="text-muted-foreground max-w-2xl mx-auto">
+            From AI-powered seating assignments to{" "}
+            <Link href="#how-it-works" className="text-primary hover:underline">
+              QR code check-in
+            </Link>
+            , I automate the chaos so you can focus on your event.
           </p>
         </motion.div>
 
@@ -116,7 +124,7 @@ export const FeaturesSection = () => {
           className="text-center mt-12"
         >
           <p className="text-muted-foreground italic">
-            * I also do belly rubs but that is a premium feature (jk it is free)
+            * I also do belly rubs but that is a premium feature
           </p>
         </motion.div>
       </div>

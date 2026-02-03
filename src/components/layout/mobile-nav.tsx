@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { Plus, Dog } from "lucide-react"
+import { Dog, Plus } from "lucide-react"
 import {
   Sheet,
   SheetContent,
@@ -33,7 +33,7 @@ export function MobileNav({ open, onOpenChange }: MobileNavProps) {
         <SheetHeader className="border-b px-4 py-4">
           <SheetTitle className="flex items-center gap-2">
             <Dog className="h-6 w-6 text-primary" />
-            Seatherder
+            <span className="text-primary">Seatherder</span>
           </SheetTitle>
         </SheetHeader>
 

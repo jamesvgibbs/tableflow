@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Plus, Dog } from "lucide-react"
+import { Dog, Plus } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -50,7 +50,7 @@ export function AppSidebar({ isCollapsed, onToggle }: AppSidebarProps) {
             >
               <Dog className="h-6 w-6 text-primary" />
               {!isCollapsed && (
-                <span className="text-lg">Seatherder</span>
+                <span className="text-lg text-primary">Seatherder</span>
               )}
             </Link>
           </div>

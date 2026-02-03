@@ -6,26 +6,26 @@ import { ArrowRight, Brain, QrCode, Sparkles, Upload } from "lucide-react";
 const steps = [
   {
     icon: Upload,
-    title: "Upload",
-    subtitle: "give me the names!",
+    title: "Upload Your Guests",
+    subtitle: "takes about 30 seconds",
     description:
-      "You give me the names. Departments. Dietary needs. Who should not sit near whom. I do not ask why. That is not my business. My business is seating.",
+      "Import your guest list from a spreadsheet. Add departments, dietary needs, and any constraints. Tell me who should not sit together. I do not ask why.",
     color: "from-blue-400 to-cyan-400",
   },
   {
     icon: Brain,
-    title: "I Think",
-    subtitle: "*thinking noises*",
+    title: "I Do the Math",
+    subtitle: "takes about 3 seconds",
     description:
-      "This is the part where I work. I consider all the factors. I mix the departments. I separate the rivals. I honor the vegetarians. It takes me seconds. It would take you hours. This is not a brag. It is a fact.",
+      "I consider every factor. I mix departments. I separate rivals. I honor dietary restrictions. I find the optimal arrangement. You would need hours. I need seconds.",
     color: "from-primary to-pink-400",
   },
   {
     icon: QrCode,
-    title: "Everyone Has a Seat",
-    subtitle: "good boy achievement unlocked!",
+    title: "Your Event Runs Smoothly",
+    subtitle: "you look like a genius",
     description:
-      "I produce the chart. I generate the QR codes. Your guests scan. They sit. They meet someone new. You say 'good boy.' This is the system.",
+      "Guests scan QR codes to find their seats. You track check-ins in real-time. People meet someone new. Everyone is happy. You get credit for the smooth event.",
     color: "from-success to-emerald-400",
   },
 ];
@@ -41,12 +41,14 @@ export const HowItWorksSection = () => {
           transition={{ duration: 0.6 }}
           className="text-center mb-16"
         >
+          <p className="text-lg text-muted-foreground mb-2">
+            Here is my plan for you.
+          </p>
           <h2 className="font-display text-3xl md:text-4xl lg:text-5xl mb-2 text-foreground">
-            My process is elegant.
+            Three steps to perfect seating.
           </h2>
           <p className="text-xl text-primary font-bold flex items-center justify-center gap-2">
-            Scientists (me) have confirmed this.
-            <span>🔬</span>
+            Simple. Fast. Effective. 🐕
           </p>
         </motion.div>
 
@@ -123,7 +125,7 @@ export const HowItWorksSection = () => {
           ))}
         </div>
 
-        {/* Fun bottom note */}
+        {/* Success statement */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -132,14 +134,12 @@ export const HowItWorksSection = () => {
           className="text-center mt-12"
         >
           <div className="inline-flex items-center gap-2 bg-card rounded-full px-6 py-3 border-4 border-primary/20 shadow-soft">
-            <Sparkles className="w-5 h-5 text-primary animate-sparkle" />
+            <Sparkles className="w-5 h-5 text-primary" />
             <span className="font-bold text-foreground">
-              Total time: about 3 seconds
+              Your event, seated in under 5 minutes.
             </span>
-            <span className="text-muted-foreground">
-              (I am fast because I care)
-            </span>
-            <span className="text-xl">⚡</span>
+            <span className="text-muted-foreground">No spreadsheets.</span>
+            <span className="text-xl">✨</span>
           </div>
         </motion.div>
       </div>

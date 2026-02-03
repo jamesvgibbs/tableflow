@@ -47,6 +47,8 @@ export default defineSchema({
     // Guest self-service settings
     selfServiceDeadline: v.optional(v.string()),         // ISO datetime - after this, guests can't edit
     selfServiceNotificationsEnabled: v.optional(v.boolean()), // Notify organizer of guest changes
+    // Free tier tracking
+    isFreeEvent: v.optional(v.boolean()),                // true if created via free trial (has limits)
   })
     .index("by_user", ["userId"]),
 
@@ -260,6 +262,49 @@ export default defineSchema({
     .index("by_session", ["sessionId"])
     .index("by_guest", ["guestId"])
     .index("by_event", ["eventId"]),
+
+  // =============================================================================
+  // Purchases & Billing
+  // =============================================================================
+
+  // Track user purchases and event credits
+  purchases: defineTable({
+    userId: v.string(),                         // Clerk user ID
+    stripeCustomerId: v.optional(v.string()),   // Stripe customer ID for future use
+    stripeCheckoutSessionId: v.string(),        // Stripe checkout session ID
+    stripePaymentIntentId: v.optional(v.string()), // Payment intent ID
+    productType: v.string(),                    // "single" | "bundle_3" | "annual"
+    eventCredits: v.number(),                   // Number of event credits (or -1 for unlimited)
+    eventsUsed: v.number(),                     // Events consumed from this purchase
+    amount: v.number(),                         // Amount paid in cents
+    currency: v.string(),                       // "usd"
+    status: v.string(),                         // "pending" | "active" | "expired" | "cancelled"
+    expiresAt: v.optional(v.string()),          // ISO timestamp for annual subscriptions
+    createdAt: v.string(),                      // ISO timestamp
+    updatedAt: v.string(),                      // ISO timestamp
+  })
+    .index("by_user", ["userId"])
+    .index("by_stripe_session", ["stripeCheckoutSessionId"])
+    .index("by_status", ["userId", "status"]),
+
+  // =============================================================================
+  // Checkout Recovery (Abandoned Cart)
+  // =============================================================================
+
+  // Track checkout intents for abandoned cart recovery emails
+  checkoutIntents: defineTable({
+    userId: v.string(),                         // Clerk user ID
+    email: v.string(),                          // User's email for recovery
+    productType: v.string(),                    // "single" | "bundle_3" | "annual"
+    stripeSessionId: v.string(),                // Stripe checkout session ID
+    status: v.string(),                         // "pending" | "completed" | "expired"
+    createdAt: v.number(),                      // Timestamp when checkout started
+    convertedAt: v.optional(v.number()),        // Timestamp when purchase completed
+    followUpSentAt: v.optional(v.number()),     // Timestamp when recovery email sent
+  })
+    .index("by_user", ["userId"])
+    .index("by_stripe_session", ["stripeSessionId"])
+    .index("by_status", ["status"]),
 
   // =============================================================================
   // Seating History (Cross-Event Memory)

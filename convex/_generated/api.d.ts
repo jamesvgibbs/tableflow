@@ -9,18 +9,23 @@
  */
 
 import type * as attachments from "../attachments.js";
+import type * as checkoutRecovery from "../checkoutRecovery.js";
 import type * as constraints from "../constraints.js";
+import type * as crons from "../crons.js";
 import type * as email from "../email.js";
 import type * as emailQueue from "../emailQueue.js";
 import type * as events from "../events.js";
 import type * as guests from "../guests.js";
 import type * as http from "../http.js";
+import type * as lib_tierLimits from "../lib/tierLimits.js";
 import type * as matching from "../matching.js";
 import type * as matchingConfig from "../matchingConfig.js";
 import type * as preview from "../preview.js";
+import type * as purchases from "../purchases.js";
 import type * as rooms from "../rooms.js";
 import type * as seatingHistory from "../seatingHistory.js";
 import type * as sessions from "../sessions.js";
+import type * as stripe from "../stripe.js";
 import type * as tables from "../tables.js";
 import type * as themes from "../themes.js";
 
@@ -32,18 +37,23 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   attachments: typeof attachments;
+  checkoutRecovery: typeof checkoutRecovery;
   constraints: typeof constraints;
+  crons: typeof crons;
   email: typeof email;
   emailQueue: typeof emailQueue;
   events: typeof events;
   guests: typeof guests;
   http: typeof http;
+  "lib/tierLimits": typeof lib_tierLimits;
   matching: typeof matching;
   matchingConfig: typeof matchingConfig;
   preview: typeof preview;
+  purchases: typeof purchases;
   rooms: typeof rooms;
   seatingHistory: typeof seatingHistory;
   sessions: typeof sessions;
+  stripe: typeof stripe;
   tables: typeof tables;
   themes: typeof themes;
 }>;

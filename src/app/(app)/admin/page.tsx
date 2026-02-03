@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
-import { useQuery, useMutation } from 'convex/react'
+import { useQuery, useMutation, useAction } from 'convex/react'
 import { useUser } from '@clerk/nextjs'
 import { api } from '@convex/_generated/api'
 import { Id } from '@convex/_generated/dataModel'
@@ -25,7 +25,7 @@ import {
 } from '@/components/ui/dialog'
 import { EventTypeSelector, EventTypeDisplay } from '@/components/event-type-selector'
 import { WelcomeModal } from '@/components/welcome-modal'
-import { Plus, Trash2, Table as TableIcon, Calendar } from 'lucide-react'
+import { Plus, Trash2, Table as TableIcon, Calendar, CreditCard, Sparkles } from 'lucide-react'
 
 export default function AdminPage() {
   const router = useRouter()
@@ -49,6 +49,9 @@ export default function AdminPage() {
   const events = useQuery(api.events.list)
   const createEvent = useMutation(api.events.create)
   const deleteEventMutation = useMutation(api.events.remove)
+  const canCreateEventResult = useQuery(api.purchases.canCreateEvent)
+  const createCheckout = useAction(api.stripe.createCheckoutSession)
+  const [isPurchasing, setIsPurchasing] = useState(false)
 
   // Check for ?create=true URL param to auto-open create dialog
   useEffect(() => {
@@ -105,10 +108,34 @@ export default function AdminPage() {
       toast.success('Your event is ready. I am excited.')
       setShowCreateDialog(false)
       router.push(`/event/${eventId}`)
-    } catch {
-      toast.error('Something went wrong. I could not create the event.')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error'
+      if (message === 'NO_CREDITS') {
+        toast.error('You need to purchase credits to create another event.')
+        setShowCreateDialog(false)
+      } else {
+        toast.error('Something went wrong. I could not create the event.')
+      }
     } finally {
       setIsCreating(false)
+    }
+  }
+
+  const handlePurchase = async (productType: string) => {
+    setIsPurchasing(true)
+    try {
+      const baseUrl = window.location.origin
+      const result = await createCheckout({
+        productType,
+        cancelUrl: `${baseUrl}/admin`
+      })
+      if (result.url) {
+        window.location.href = result.url
+      }
+    } catch {
+      toast.error('Could not start checkout. Please try again.')
+    } finally {
+      setIsPurchasing(false)
     }
   }
 
@@ -166,11 +193,66 @@ export default function AdminPage() {
         </p>
       </div>
 
+      {/* Credits Status */}
+      {canCreateEventResult && (
+        <div className="mb-8 animate-fade-in">
+          <Card className="border-primary/20">
+            <CardContent className="py-4">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-full bg-primary/10">
+                    <CreditCard className="h-5 w-5 text-primary" />
+                  </div>
+                  <div>
+                    {canCreateEventResult.reason === 'unlimited' ? (
+                      <p className="font-medium">Unlimited events <Badge variant="secondary">Annual</Badge></p>
+                    ) : canCreateEventResult.canCreate ? (
+                      <p className="font-medium">{canCreateEventResult.creditsRemaining} event{canCreateEventResult.creditsRemaining !== 1 ? 's' : ''} remaining</p>
+                    ) : (
+                      <p className="font-medium text-muted-foreground">No credits remaining</p>
+                    )}
+                  </div>
+                </div>
+                {(!canCreateEventResult.canCreate || canCreateEventResult.reason !== 'unlimited') && (
+                  <div className="flex gap-2 flex-wrap justify-center">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handlePurchase('single')}
+                      disabled={isPurchasing}
+                    >
+                      1 Event · $49
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handlePurchase('bundle_3')}
+                      disabled={isPurchasing}
+                    >
+                      3 Events · $129
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => handlePurchase('annual')}
+                      disabled={isPurchasing}
+                    >
+                      <Sparkles className="h-4 w-4 mr-1" />
+                      Unlimited · $249/yr
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {/* Create New Event Button */}
       <div className="flex justify-center mb-8 animate-slide-up">
         <Button
           size="lg"
           onClick={handleOpenCreateDialog}
+          disabled={canCreateEventResult && !canCreateEventResult.canCreate}
           className="gap-2 shadow-lg hover:shadow-xl transition-shadow"
         >
           <Plus className="h-5 w-5" />

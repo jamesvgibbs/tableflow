@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Heart } from "lucide-react";
+import { Dog, Heart } from "lucide-react";
 import Link from "next/link";
 
 const footerLinks = [
@@ -19,9 +19,9 @@ export const Footer = () => {
             className="text-center md:text-left flex items-center gap-3"
             whileHover={{ scale: 1.02 }}
           >
-            <span className="text-3xl">🐕</span>
+            <Dog className="h-6 w-6 text-primary" />
             <div>
-              <span className="font-display text-lg font-bold bg-linear-to-r from-primary to-pink-500 bg-clip-text text-transparent">
+              <span className="font-display text-lg font-bold text-primary">
                 Seatherder
               </span>
               <p className="text-sm text-muted-foreground">
